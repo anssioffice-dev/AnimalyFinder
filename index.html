@@ -1,0 +1,1436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trapcam Analyser</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink:      #1a1a18; --ink2: #4a4a46; --ink3: #8a8a84;
+      --paper:    #f5f3ee; --surface: #eceae4; --line: #d8d5cc;
+      --flag:     #b83a1a; --flag-bg: #fdf0ec; --flag-line: #f0b8a8;
+      --ok:       #2a6e3a; --ok-bg: #edf6ef;   --ok-line: #a8d4b0;
+      --blue:     #1a4a8a; --blue-bg: #eef3fb;
+      --r:        6px;
+      --mono:     'IBM Plex Mono', monospace;
+      --sans:     'IBM Plex Sans', sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { background: var(--paper); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.6; }
+    body { min-height: 100vh; }
+
+    /* ── SETUP OVERLAY ─────────────────────────────────── */
+    #setup-overlay { position: fixed; inset: 0; background: #111110; display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 2rem; overflow-y: auto; }
+    #setup-overlay.hidden { display: none; }
+    .setup-card { max-width: 580px; width: 100%; }
+    .setup-logo { font-family: var(--mono); font-size: 20px; color: #fff; margin-bottom: 6px; }
+    .setup-logo span { color: #e87a50; }
+    .setup-tagline { font-size: 13px; color: #777; margin-bottom: 2rem; }
+    .setup-section { margin-bottom: 1.8rem; }
+    .setup-section-title { font-size: 11px; font-family: var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: #666; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #2a2a28; }
+    .setup-steps { counter-reset: s; }
+    .setup-step { counter-increment: s; display: flex; gap: 12px; margin-bottom: 12px; font-size: 13px; color: #999; line-height: 1.65; }
+    .setup-step::before { content: counter(s); min-width: 22px; height: 22px; border-radius: 50%; border: 1px solid #444; display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 11px; color: #777; flex-shrink: 0; margin-top: 2px; }
+    .setup-step a { color: #7ab0f0; text-decoration: none; }
+    .setup-step a:hover { text-decoration: underline; }
+    .setup-step code { background: #222220; padding: 1px 6px; border-radius: 3px; font-family: var(--mono); font-size: 11px; color: #ddd; }
+    .setup-step strong { color: #ccc; font-weight: 500; }
+    .setup-fields { display: flex; flex-direction: column; gap: 10px; margin-top: 1.2rem; }
+    .setup-field label { display: block; font-size: 11px; font-family: var(--mono); color: #666; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 5px; }
+    .setup-field input { width: 100%; background: #1a1a18; border: 1px solid #333; border-radius: var(--r); color: #eee; font-family: var(--mono); font-size: 12px; padding: 10px 14px; outline: none; transition: border-color 0.15s; }
+    .setup-field input:focus { border-color: #7ab0f0; }
+    .setup-field input::placeholder { color: #444; }
+    .setup-hint { font-size: 11px; color: #555; margin-top: 4px; line-height: 1.5; }
+    .setup-save-btn { margin-top: 1.2rem; width: 100%; padding: 12px; background: #e87a50; color: #fff; border: none; border-radius: var(--r); font-family: var(--sans); font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.15s; }
+    .setup-save-btn:hover { background: #f09070; }
+    .setup-privacy { font-size: 11px; color: #444; text-align: center; margin-top: 10px; line-height: 1.6; }
+
+    /* ── SHELL ─────────────────────────────────────────── */
+    #shell { display: none; max-width: 960px; margin: 0 auto; padding: 1.5rem; }
+    #shell.visible { display: block; }
+
+    /* ── HEADER ────────────────────────────────────────── */
+    header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 1rem; border-bottom: 1px solid var(--line); margin-bottom: 2rem; flex-wrap: wrap; gap: 10px; }
+    .wordmark { font-family: var(--mono); font-size: 16px; color: var(--ink); }
+    .wordmark span { color: var(--flag); }
+    .header-right { display: flex; align-items: center; gap: 10px; }
+    .user-pill { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink2); background: var(--surface); border-radius: 20px; padding: 5px 12px 5px 5px; }
+    .avatar { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; }
+    .btn-sm { background: #fff; border: 1px solid var(--line); border-radius: var(--r); padding: 5px 12px; font-size: 12px; color: var(--ink2); cursor: pointer; font-family: var(--sans); transition: border-color 0.13s; }
+    .btn-sm:hover { border-color: var(--ink3); color: var(--ink); }
+
+    /* ── SIGN IN ────────────────────────────────────────── */
+    #screen-signin { text-align: center; padding: 5rem 2rem; }
+    .signin-title { font-family: var(--mono); font-size: 26px; margin-bottom: 8px; }
+    .signin-sub { color: var(--ink2); font-size: 14px; margin-bottom: 2rem; }
+    .btn-google { display: inline-flex; align-items: center; gap: 10px; background: #fff; border: 1px solid var(--line); border-radius: var(--r); padding: 12px 24px; font-size: 14px; font-weight: 500; color: var(--ink); cursor: pointer; font-family: var(--sans); transition: box-shadow 0.15s, border-color 0.15s; }
+    .btn-google:hover { border-color: #aaa; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .g-logo { width: 18px; height: 18px; }
+
+    /* ── FOLDER SCREEN ──────────────────────────────────── */
+    #screen-folders { display: none; }
+    .screen-head { margin-bottom: 1.5rem; }
+    .screen-title { font-family: var(--mono); font-size: 18px; margin-bottom: 4px; }
+    .screen-sub { font-size: 13px; color: var(--ink2); }
+    .folder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; margin-bottom: 1.5rem; }
+    .folder-card { background: #fff; border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; cursor: pointer; display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--ink); transition: border-color 0.13s; }
+    .folder-card:hover { border-color: var(--ink3); }
+    .folder-card.sel { border-color: var(--blue); background: var(--blue-bg); color: var(--blue); }
+    .folder-card .fi { font-size: 18px; flex-shrink: 0; }
+    .folder-card .fn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .btn-primary { background: var(--ink); color: var(--paper); border: none; border-radius: var(--r); padding: 10px 20px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: var(--sans); transition: background 0.13s; display: inline-flex; align-items: center; gap: 7px; }
+    .btn-primary:hover { background: #2a2a28; }
+    .btn-primary:disabled { background: var(--surface); color: var(--ink3); cursor: not-allowed; }
+    .btn-outline { background: #fff; border: 1px solid var(--line); border-radius: var(--r); padding: 10px 20px; font-size: 13px; color: var(--ink); cursor: pointer; font-family: var(--sans); transition: border-color 0.13s; }
+    .btn-outline:hover { border-color: var(--ink3); }
+    .btn-outline:disabled { color: var(--ink3); cursor: not-allowed; }
+
+    /* ── ANALYSE SCREEN ─────────────────────────────────── */
+    #screen-analyse { display: none; }
+    .top-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    .back-btn { background: none; border: 1px solid var(--line); border-radius: var(--r); padding: 7px 13px; font-size: 13px; color: var(--ink2); cursor: pointer; font-family: var(--sans); }
+    .back-btn:hover { border-color: var(--ink3); color: var(--ink); }
+    .folder-tag { font-family: var(--mono); font-size: 13px; color: var(--ink2); background: var(--surface); padding: 5px 10px; border-radius: var(--r); }
+
+    .stats-strip { display: flex; gap: 8px; margin-bottom: 1.2rem; flex-wrap: wrap; }
+    .stat-pill { background: #fff; border: 1px solid var(--line); border-radius: 20px; padding: 4px 13px; font-size: 13px; color: var(--ink2); display: flex; align-items: center; gap: 5px; }
+    .stat-pill .n { font-family: var(--mono); font-weight: 500; color: var(--ink); }
+    .stat-pill.sp-flag .n { color: var(--flag); }
+    .stat-pill.sp-ok .n { color: var(--ok); }
+
+    .ctrl-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 0.8rem; flex-wrap: wrap; }
+    .filter-group { display: flex; gap: 5px; margin-left: auto; flex-wrap: wrap; }
+    .fbtn { background: #fff; border: 1px solid var(--line); border-radius: 20px; padding: 4px 12px; font-size: 12px; color: var(--ink2); cursor: pointer; font-family: var(--sans); transition: all 0.12s; }
+    .fbtn.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+    .fbtn.fb-flag.active { background: var(--flag); border-color: var(--flag); }
+    .fbtn.fb-ok.active { background: var(--ok); border-color: var(--ok); }
+
+    .prog-wrap { margin-bottom: 0.8rem; display: none; }
+    .prog-bar { height: 3px; background: var(--surface); border-radius: 2px; overflow: hidden; margin-bottom: 5px; }
+    .prog-fill { height: 100%; background: var(--ink); border-radius: 2px; transition: width 0.35s; width: 0%; }
+    .prog-lbl { font-size: 12px; font-family: var(--mono); color: var(--ink3); }
+
+    .main-layout { display: grid; grid-template-columns: 1fr 320px; gap: 14px; align-items: start; }
+    @media (max-width: 680px) { .main-layout { grid-template-columns: 1fr; } }
+
+    /* ── PHOTO GRID ─────────────────────────────────────── */
+    .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 7px; }
+    .pc { background: #fff; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; cursor: pointer; position: relative; transition: border-color 0.12s; }
+    .pc:hover { border-color: var(--ink3); }
+    .pc.pc-active { border: 2px solid var(--blue); }
+    .pc.pc-flag { border-color: #e8a090; }
+    .pc.pc-ok { border-color: #a0ccaa; }
+    .pc-thumb { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; background: var(--surface); }
+    .pc-ph { width: 100%; aspect-ratio: 4/3; background: var(--surface); display: flex; align-items: center; justify-content: center; font-size: 22px; }
+    .pc-foot { padding: 5px 7px; }
+    .pc-name { font-size: 10px; font-family: var(--mono); color: var(--ink3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pbadge { position: absolute; top: 4px; left: 4px; font-size: 9px; font-family: var(--mono); font-weight: 500; padding: 2px 6px; border-radius: 3px; letter-spacing: 0.05em; }
+    .pb-flag { background: var(--flag); color: #fff; }
+    .pb-ok { background: var(--ok); color: #fff; }
+    .pb-busy { background: var(--blue); color: #fff; }
+    .grid-empty { font-size: 13px; color: var(--ink3); padding: 1.5rem 0; }
+
+    /* ── DETAIL ─────────────────────────────────────────── */
+    .detail { background: #fff; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; position: sticky; top: 1rem; }
+    .d-img { width: 100%; aspect-ratio: 4/3; object-fit: contain; background: #111; display: block; }
+    .d-ph { width: 100%; aspect-ratio: 4/3; background: var(--surface); display: flex; align-items: center; justify-content: center; font-size: 32px; color: var(--ink3); }
+    .d-body { padding: 14px; }
+    .d-name { font-family: var(--mono); font-size: 12px; font-weight: 500; overflow-wrap: break-word; margin-bottom: 2px; }
+    .d-date { font-size: 11px; color: var(--ink3); margin-bottom: 12px; }
+    .verdict { border-radius: var(--r); padding: 11px 13px; margin-bottom: 11px; }
+    .v-flag { background: var(--flag-bg); border: 1px solid var(--flag-line); }
+    .v-ok   { background: var(--ok-bg);   border: 1px solid var(--ok-line); }
+    .v-busy { background: var(--blue-bg); border: 1px solid #b8ccee; }
+    .v-idle { background: var(--surface); border: 1px solid var(--line); }
+    .v-lbl { font-size: 10px; font-family: var(--mono); font-weight: 500; letter-spacing: 0.09em; text-transform: uppercase; margin-bottom: 5px; }
+    .v-flag .v-lbl { color: var(--flag); }
+    .v-ok   .v-lbl { color: var(--ok); }
+    .v-busy .v-lbl { color: var(--blue); }
+    .v-idle .v-lbl { color: var(--ink3); }
+    .v-text { font-size: 13px; color: var(--ink); line-height: 1.6; }
+    .label-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+    .lchip { font-size: 10px; font-family: var(--mono); background: var(--surface); color: var(--ink2); padding: 2px 7px; border-radius: 3px; }
+    .lchip.lc-flag { background: var(--flag-bg); color: var(--flag); }
+    .d-btn { width: 100%; padding: 9px; background: var(--ink); color: var(--paper); border: none; border-radius: var(--r); font-size: 13px; font-weight: 500; cursor: pointer; font-family: var(--sans); transition: background 0.13s; }
+    .d-btn:hover { background: #2a2a28; }
+    .d-btn:disabled { background: var(--surface); color: var(--ink3); cursor: not-allowed; }
+    .d-empty { padding: 2rem; text-align: center; font-size: 13px; color: var(--ink3); line-height: 1.7; }
+
+    .pc-check { position: absolute; top: 4px; right: 4px; width: 18px; height: 18px; border-radius: 4px; background: rgba(255,255,255,0.85); border: 1.5px solid var(--ink3); display: none; align-items: center; justify-content: center; font-size: 12px; z-index: 2; }
+    .pc-check.show { display: flex; }
+    .pc.pc-selected .pc-check { background: var(--blue); border-color: var(--blue); color: #fff; }
+    .pc.pc-selected { outline: 2px solid var(--blue); outline-offset: -2px; }
+
+    /* COMPARE MODAL */
+    #compare-overlay { position: fixed; inset: 0; background: rgba(20,20,18,0.92); z-index: 800; display: none; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 2rem 1rem; }
+    #compare-overlay.show { display: flex; }
+    .compare-card { background: var(--paper); border-radius: var(--r); max-width: 920px; width: 100%; padding: 1.5rem; }
+    .compare-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+    .compare-title { font-family: var(--mono); font-size: 16px; }
+    .compare-pairs { display: flex; flex-direction: column; gap: 1.2rem; }
+    .compare-pair-title { font-size: 12px; font-family: var(--mono); color: var(--ink2); margin-bottom: 6px; }
+    .compare-canvases { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .compare-canvases canvas { width: 100%; border-radius: var(--r); border: 1px solid var(--line); background: #111; display: block; }
+    .compare-lbl { font-size: 10px; font-family: var(--mono); color: var(--ink3); text-align: center; margin-top: 3px; text-transform: uppercase; letter-spacing: 0.06em; }
+    .compare-loading { font-size: 13px; color: var(--ink3); font-family: var(--mono); padding: 1rem 0; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── VIEWER TAB SWITCH ─────────────────────────────── */
+    .tab-switch { display: flex; gap: 6px; margin-bottom: 1.2rem; }
+    .tab-switch button { background: #fff; border: 1px solid var(--line); border-radius: var(--r); padding: 7px 16px; font-size: 13px; color: var(--ink2); cursor: pointer; font-family: var(--sans); transition: all 0.13s; }
+    .tab-switch button.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+    /* ── VIEWER SCREEN ──────────────────────────────────── */
+    #screen-viewer { display: none; }
+    .viewer-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 1rem; }
+    .vc { background: #fff; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; cursor: pointer; position: relative; transition: border-color 0.12s; }
+    .vc:hover { border-color: var(--ink3); }
+    .vc.vc-selected { outline: 2px solid var(--blue); outline-offset: -2px; }
+    .vc-thumb { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; background: var(--surface); }
+    .vc-ph { width: 100%; aspect-ratio: 4/3; background: var(--surface); display: flex; align-items: center; justify-content: center; font-size: 22px; }
+    .vc-foot { padding: 5px 7px; }
+    .vc-name { font-size: 10px; font-family: var(--mono); color: var(--ink3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .vc-date { font-size: 10px; font-family: var(--mono); color: var(--ink3); opacity: 0.7; }
+    .vc-check { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 4px; background: rgba(255,255,255,0.85); border: 1.5px solid var(--ink3); display: flex; align-items: center; justify-content: center; font-size: 12px; z-index: 2; font-family: var(--mono); }
+    .vc.vc-selected .vc-check { background: var(--blue); border-color: var(--blue); color: #fff; }
+    .vc-order { position: absolute; top: 4px; left: 4px; font-size: 10px; font-family: var(--mono); font-weight: 500; padding: 2px 6px; border-radius: 3px; background: var(--blue); color: #fff; z-index: 2; }
+
+    .viewer-ctrl { display: flex; gap: 8px; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
+    .viewer-status { font-size: 12px; font-family: var(--mono); color: var(--ink3); }
+    .vsel-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; background: var(--blue-bg); border: 1px solid #b8ccee; border-radius: var(--r); padding: 8px 12px; }
+    .vsel-bar .lbl { font-size: 12px; color: var(--blue); font-family: var(--mono); }
+
+    /* Filter panel */
+    .filter-panel { background: #fff; border: 1px solid var(--line); border-radius: var(--r); padding: 14px; margin-bottom: 1rem; display: none; }
+    .filter-panel.show { display: block; }
+    .filter-row2 { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+    .filter-row2:last-child { margin-bottom: 0; }
+    .filter-row2 label { font-size: 11px; font-family: var(--mono); color: var(--ink3); letter-spacing: 0.07em; text-transform: uppercase; min-width: 70px; }
+    .filter-row2 input, .filter-row2 select { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 6px 10px; font-size: 12px; font-family: var(--sans); color: var(--ink); }
+    .seg { display: flex; gap: 0; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+    .seg button { background: #fff; border: none; padding: 6px 14px; font-size: 12px; color: var(--ink2); cursor: pointer; font-family: var(--sans); border-right: 1px solid var(--line); }
+    .seg button:last-child { border-right: none; }
+    .seg button.active { background: var(--ink); color: var(--paper); }
+
+    /* ── VIEW MODAL (single image) ─────────────────────── */
+    #view-overlay { position: fixed; inset: 0; background: rgba(20,20,18,0.92); z-index: 850; display: none; align-items: center; justify-content: center; padding: 2rem 1rem; }
+    #view-overlay.show { display: flex; }
+    .view-card { max-width: 92vw; max-height: 92vh; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+    .view-card img { max-width: 92vw; max-height: 78vh; object-fit: contain; border-radius: var(--r); background: #111; }
+    .view-meta { color: #ddd; font-size: 12px; font-family: var(--mono); display: flex; align-items: center; gap: 14px; }
+    .view-close { position: absolute; top: 16px; right: 16px; background: #fff; border: none; border-radius: var(--r); padding: 6px 14px; font-size: 12px; cursor: pointer; font-family: var(--sans); z-index: 10; }
+    .view-nav { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.12); border: none; color: #fff; font-size: 32px; line-height: 1; width: 52px; height: 64px; border-radius: var(--r); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.15s; z-index: 10; }
+    .view-nav:hover { background: rgba(255,255,255,0.25); }
+    .view-nav:disabled { opacity: 0.25; cursor: not-allowed; }
+    .view-nav-prev { left: 16px; }
+    .view-nav-next { right: 16px; }
+    .view-meta button { background: #fff; border: none; border-radius: var(--r); padding: 6px 14px; font-size: 12px; cursor: pointer; font-family: var(--sans); }
+
+    /* ── COMPARE SLIDER ─────────────────────────────────── */
+    #slider-overlay { position: fixed; inset: 0; background: rgba(20,20,18,0.92); z-index: 850; display: none; align-items: center; justify-content: center; padding: 2rem 1rem; }
+    #slider-overlay.show { display: flex; }
+    .slider-card { max-width: 920px; width: 100%; }
+    .slider-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; color: #ddd; font-family: var(--mono); font-size: 12px; }
+    .slider-head button { background: #fff; border: none; border-radius: var(--r); padding: 6px 14px; font-size: 12px; cursor: pointer; font-family: var(--sans); }
+    .slider-wrap { position: relative; width: 100%; aspect-ratio: 4/3; border-radius: var(--r); overflow: hidden; background: #111; user-select: none; touch-action: none; }
+    .slider-wrap img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+    .slider-img-bottom { z-index: 1; }
+    .slider-img-top { z-index: 2; }
+    .slider-handle-area { position: absolute; inset: 0; z-index: 3; cursor: ew-resize; }
+    .slider-line { position: absolute; top: 0; bottom: 0; width: 2px; background: #fff; box-shadow: 0 0 6px rgba(0,0,0,0.6); z-index: 4; pointer-events: none; }
+    .slider-knob { position: absolute; top: 50%; width: 36px; height: 36px; border-radius: 50%; background: #fff; transform: translate(-50%,-50%); display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--ink); box-shadow: 0 2px 8px rgba(0,0,0,0.4); z-index: 5; pointer-events: none; }
+    .slider-label { position: absolute; bottom: 8px; font-size: 10px; font-family: var(--mono); font-weight: 500; padding: 3px 9px; border-radius: 3px; background: rgba(0,0,0,0.6); color: #fff; z-index: 4; letter-spacing: 0.06em; }
+    .slider-label.left { left: 8px; }
+    .slider-label.right { right: 8px; }
+    .slider-foot { margin-top: 10px; color: #aaa; font-size: 11px; font-family: var(--mono); text-align: center; }
+    .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: -1px; }
+
+    #toast { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%) translateY(8px); background: var(--ink); color: var(--paper); padding: 8px 20px; border-radius: 20px; font-size: 12px; font-family: var(--mono); opacity: 0; transition: all 0.22s; pointer-events: none; z-index: 999; white-space: nowrap; }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    #toast.terr { background: var(--flag); }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════ SETUP OVERLAY ═══════════════════════ -->
+<div id="setup-overlay">
+  <div class="setup-card">
+    <div class="setup-logo">trapcam<span>.</span>analyser</div>
+    <div class="setup-tagline">One-time setup — takes about 10 minutes</div>
+
+    <div class="setup-section">
+      <div class="setup-section-title">1 — Create a Google Cloud project</div>
+      <div class="setup-steps">
+        <div class="setup-step">Go to <a href="https://console.cloud.google.com" target="_blank">console.cloud.google.com</a> and create a new project (name it anything, e.g. <code>Trapcam</code>).</div>
+        <div class="setup-step">Go to <strong>APIs &amp; Services → Library</strong> and enable both <code>Google Drive API</code> and <code>Cloud Vision API</code>.</div>
+      </div>
+    </div>
+
+    <div class="setup-section">
+      <div class="setup-section-title">2 — Create OAuth Client ID (for Drive login)</div>
+      <div class="setup-steps">
+        <div class="setup-step">Go to <strong>APIs &amp; Services → OAuth consent screen</strong>. Choose <strong>External</strong>. Fill in an app name and your email. Skip scopes for now.</div>
+        <div class="setup-step">On the <strong>Test users</strong> step, add the Google email of <em>everyone</em> who will use this app (including yourself and any friends).</div>
+        <div class="setup-step">Go to <strong>Credentials → Create Credentials → OAuth 2.0 Client ID</strong>. Type: <strong>Web application</strong>. Under <strong>Authorised JavaScript origins</strong> add <code>http://localhost</code> for local use, or your hosting URL. Copy the <strong>Client ID</strong>.</div>
+      </div>
+    </div>
+
+    <div class="setup-section">
+      <div class="setup-section-title">3 — Create Vision API key (free — 1,000 photos/month)</div>
+      <div class="setup-steps">
+        <div class="setup-step">Go to <strong>Credentials → Create Credentials → API key</strong>. Copy the key. Optionally restrict it to <code>Cloud Vision API</code> only.</div>
+      </div>
+    </div>
+
+    <div class="setup-section">
+      <div class="setup-section-title">4 — Paste your keys below</div>
+      <div class="setup-fields">
+        <div class="setup-field">
+          <label>OAuth Client ID</label>
+          <input type="text" id="in-client-id" placeholder="123456789-abc….apps.googleusercontent.com">
+          <div class="setup-hint">From Credentials → OAuth 2.0 Client IDs</div>
+        </div>
+        <div class="setup-field">
+          <label>Vision API Key</label>
+          <input type="text" id="in-vision-key" placeholder="AIzaSy…">
+          <div class="setup-hint">From Credentials → API Keys. Free up to 1,000 images/month.</div>
+        </div>
+      </div>
+      <button class="setup-save-btn" onclick="saveSetup()">Save &amp; open app →</button>
+      <div class="setup-privacy">Your keys are saved only in this browser (localStorage).<br>Photos go directly to Google Vision — nothing passes through any third-party server.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ MAIN APP ═══════════════════════ -->
+<div id="shell">
+  <header>
+    <div class="wordmark">trapcam<span>.</span>analyser</div>
+    <div class="header-right">
+      <div class="user-pill" id="user-pill" style="display:none">
+        <img class="avatar" id="u-avatar" src="" alt="">
+        <span id="u-name"></span>
+      </div>
+      <button class="btn-sm" id="settings-btn" onclick="openSettings()" style="display:none">Settings</button>
+      <button class="btn-sm" id="signout-btn" onclick="signOut()" style="display:none">Sign out</button>
+    </div>
+  </header>
+
+  <!-- SIGN IN -->
+  <div id="screen-signin">
+    <div class="signin-title">// sign in</div>
+    <div class="signin-sub">Connect your Google account to browse trapcam folders.</div>
+    <button class="btn-google" onclick="signIn()">
+      <svg class="g-logo" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+      Sign in with Google
+    </button>
+  </div>
+
+  <!-- FOLDERS -->
+  <div id="screen-folders">
+    <div class="screen-head">
+      <div class="screen-title">Choose a folder</div>
+      <div class="screen-sub" id="folder-sub">Loading your Drive folders…</div>
+    </div>
+    <div class="folder-grid" id="folder-grid"></div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn-primary" id="open-btn" onclick="openFolder()" disabled>Open folder</button>
+    </div>
+  </div>
+
+  <!-- ANALYSE -->
+  <div id="screen-analyse">
+    <div class="top-bar">
+      <button class="back-btn" onclick="goBack()">← Back</button>
+      <span class="folder-tag" id="folder-tag"></span>
+    </div>
+
+    <div class="tab-switch">
+      <button class="active" onclick="switchMode('analyse', this)">Analyser</button>
+      <button onclick="switchMode('viewer', this)">Viewer</button>
+    </div>
+
+    <div id="mode-analyse">
+    <div class="viewer-ctrl">
+      <button class="btn-outline" onclick="toggleAnalyseFilterPanel()">Filter / Get more</button>
+      <span class="viewer-status" id="analyse-status"></span>
+    </div>
+
+    <div class="filter-panel" id="analyse-filter-panel">
+      <div class="filter-row2">
+        <label>Mode</label>
+        <div class="seg" id="analyse-filter-mode-seg">
+          <button class="active" onclick="setAnalyseFilterMode('count', this)">Latest N</button>
+          <button onclick="setAnalyseFilterMode('date', this)">Date range</button>
+        </div>
+      </div>
+      <div class="filter-row2" id="analyse-filter-count-row">
+        <label>Count</label>
+        <select id="af-count">
+          <option value="12">12</option>
+          <option value="24">24</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+          <option value="all">All</option>
+        </select>
+      </div>
+      <div class="filter-row2" id="analyse-filter-date-row" style="display:none">
+        <label>From</label>
+        <input type="date" id="af-from">
+        <label style="min-width:40px">To</label>
+        <input type="date" id="af-to">
+      </div>
+      <div class="filter-row2">
+        <button class="btn-primary" onclick="applyAnalyseFilter()">Apply</button>
+      </div>
+    </div>
+
+    <div class="stats-strip">
+      <div class="stat-pill"><span class="n" id="st-tot">0</span> photos</div>
+      <div class="stat-pill sp-flag"><span class="n" id="st-flag">0</span> flagged</div>
+      <div class="stat-pill sp-ok"><span class="n" id="st-ok">0</span> normal</div>
+      <div class="stat-pill"><span class="n" id="st-pend">0</span> pending</div>
+    </div>
+    <div class="ctrl-bar">
+      <button class="btn-primary" id="btn-all" onclick="analyseAll()">Analyse all</button>
+      <button class="btn-outline" id="btn-one" onclick="analyseOne()" disabled>Analyse this photo</button>
+      <button class="btn-outline" id="btn-compare-mode" onclick="toggleCompareMode()">Select to compare</button>
+      <button class="btn-primary" id="btn-compare-go" onclick="runCompare()" style="display:none" disabled>Compare selected (0)</button>
+      <div class="filter-group">
+        <button class="fbtn active"    onclick="setFilter('all',this)">All</button>
+        <button class="fbtn fb-flag"   onclick="setFilter('flag',this)">Flagged</button>
+        <button class="fbtn fb-ok"     onclick="setFilter('ok',this)">Normal</button>
+        <button class="fbtn fb-pend"   onclick="setFilter('pend',this)">Pending</button>
+      </div>
+    </div>
+    <div class="prog-wrap" id="prog-wrap">
+      <div class="prog-bar"><div class="prog-fill" id="prog-fill"></div></div>
+      <div class="prog-lbl" id="prog-lbl"></div>
+    </div>
+    <div class="main-layout">
+      <div class="photo-grid" id="photo-grid"></div>
+      <div class="detail" id="detail"><div class="d-empty">Select a photo to see details.</div></div>
+    </div>
+    <div style="display:flex;justify-content:center;margin-top:1rem">
+      <button class="btn-outline" id="analyse-more-btn" onclick="loadMoreAnalyse()" style="display:none">Load more</button>
+    </div>
+    </div>
+
+    <!-- VIEWER MODE -->
+    <div id="mode-viewer" style="display:none">
+      <div class="viewer-ctrl">
+        <button class="btn-outline" onclick="toggleFilterPanel()">Filter / Get more</button>
+        <span class="viewer-status" id="viewer-status"></span>
+      </div>
+
+      <div class="filter-panel" id="filter-panel">
+        <div class="filter-row2">
+          <label>Mode</label>
+          <div class="seg" id="filter-mode-seg">
+            <button class="active" onclick="setFilterMode('count', this)">Latest N</button>
+            <button onclick="setFilterMode('date', this)">Date range</button>
+          </div>
+        </div>
+        <div class="filter-row2" id="filter-count-row">
+          <label>Count</label>
+          <select id="vf-count">
+            <option value="12">12</option>
+            <option value="24">24</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+            <option value="all">All</option>
+          </select>
+        </div>
+        <div class="filter-row2" id="filter-date-row" style="display:none">
+          <label>From</label>
+          <input type="date" id="vf-from">
+          <label style="min-width:40px">To</label>
+          <input type="date" id="vf-to">
+        </div>
+        <div class="filter-row2">
+          <button class="btn-primary" onclick="applyViewerFilter()">Apply</button>
+        </div>
+      </div>
+
+      <div class="vsel-bar" id="vsel-bar" style="display:none">
+        <span class="lbl" id="vsel-lbl">0 selected</span>
+        <button class="btn-primary" id="vsel-compare-btn" onclick="openSliderCompare()" disabled>Compare (slider)</button>
+        <button class="btn-outline" onclick="clearViewerSelection()">Clear selection</button>
+      </div>
+
+      <div class="viewer-grid" id="viewer-grid"></div>
+      <div style="display:flex;justify-content:center;margin-top:1rem">
+        <button class="btn-outline" id="viewer-more-btn" onclick="loadMoreViewer()" style="display:none">Load more</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="compare-overlay">
+  <div class="compare-card">
+    <div class="compare-head">
+      <div class="compare-title">// pixel diff comparison</div>
+      <button class="btn-sm" onclick="closeCompare()">Close ✕</button>
+    </div>
+    <div id="compare-body"><div class="compare-loading">Loading images…</div></div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<!-- SINGLE IMAGE VIEW -->
+<div id="view-overlay">
+  <button class="view-close" onclick="closeView()">Close ✕</button>
+  <button class="view-nav view-nav-prev" id="view-prev" onclick="navView(-1)">‹</button>
+  <button class="view-nav view-nav-next" id="view-next" onclick="navView(1)">›</button>
+  <div class="view-card">
+    <img id="view-img" src="" alt="">
+    <div class="view-meta">
+      <span id="view-name"></span>
+      <span id="view-date"></span>
+    </div>
+  </div>
+</div>
+
+<!-- BEFORE/AFTER SLIDER COMPARE -->
+<div id="slider-overlay">
+  <div class="slider-card">
+    <div class="slider-head">
+      <span id="slider-title"></span>
+      <button onclick="closeSlider()">Close ✕</button>
+    </div>
+    <div class="slider-wrap" id="slider-wrap">
+      <img class="slider-img-bottom" id="slider-img-old" src="" alt="">
+      <img class="slider-img-top" id="slider-img-new" src="" alt="">
+      <span class="slider-label left" id="slider-label-old">OLDER</span>
+      <span class="slider-label right" id="slider-label-new">NEWER</span>
+      <div class="slider-line" id="slider-line"></div>
+      <div class="slider-knob" id="slider-knob">⇔</div>
+      <div class="slider-handle-area" id="slider-handle"></div>
+    </div>
+    <div class="slider-foot">Drag the handle — right reveals the older photo, left reveals the newer one.</div>
+  </div>
+</div>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// CONFIGURATION
+// Customise FLAG_LABELS to match your location and what you consider unusual.
+// These are Google Vision label names (English, lowercase).
+// ─────────────────────────────────────────────────────────────────────────────
+const FLAG_LABELS = [
+  // People
+  'person','human','man','woman','child','people','crowd',
+  // Large predators (Finnish/European forest)
+  'wolf','lynx','bear','brown bear','wolverine','bobcat','cougar','mountain lion',
+  'golden eagle','white-tailed eagle','eagle',
+  // Concern signals
+  'vehicle','car','truck','van','snowmobile','atv','quad bike','motorcycle',
+  'injury','carcass','dead animal','blood',
+  // Uncommon intruders
+  'wild boar','wild pig','feral pig',
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────────────────────────────────────
+const DRIVE_API  = 'https://www.googleapis.com/drive/v3';
+const VISION_API = 'https://vision.googleapis.com/v1/images:annotate';
+const SCOPES     = 'https://www.googleapis.com/auth/drive.readonly profile email';
+
+let CLIENT_ID   = localStorage.getItem('tc-client-id')  || '';
+let VISION_KEY  = localStorage.getItem('tc-vision-key') || '';
+let token       = null;
+let photos      = [];
+let analyses    = {};
+let selFolder   = null;
+let selPhoto    = null;
+let activeFilter = 'all';
+let busy        = false;
+let compareMode = false;
+let compareSelection = new Set();
+
+// Analyser list state (mirrors viewer's filter approach)
+let analyseFilterMode = 'count';  // 'count' | 'date'
+let analyseList  = [];            // sorted+filtered subset of `photos` shown in analyser
+let analyseShown = 0;
+
+// Viewer state
+let viewerFilterMode = 'count';   // 'count' | 'date'
+let viewerCount      = 12;
+let viewerDateFrom   = null;
+let viewerDateTo     = null;
+let viewerPhotos     = [];        // sorted full list (newest first) matching current filter
+let viewerShown      = 0;         // how many of viewerPhotos are currently rendered
+let viewerSelection  = [];        // ordered array of selected photo ids (max meaningful = any, but slider uses 2)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BOOT
+// ─────────────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  if (!CLIENT_ID || !VISION_KEY) {
+    document.getElementById('setup-overlay').classList.remove('hidden');
+  } else {
+    bootApp();
+  }
+});
+
+function bootApp() {
+  document.getElementById('setup-overlay').classList.add('hidden');
+  document.getElementById('shell').classList.add('visible');
+}
+
+function saveSetup() {
+  const cid = document.getElementById('in-client-id').value.trim();
+  const vk  = document.getElementById('in-vision-key').value.trim();
+  if (!cid || !cid.includes('.apps.googleusercontent.com')) { toast('Paste a valid OAuth Client ID', true); return; }
+  if (!vk  || !vk.startsWith('AIza')) { toast('Paste a valid Vision API key (starts with AIza)', true); return; }
+  CLIENT_ID  = cid;
+  VISION_KEY = vk;
+  localStorage.setItem('tc-client-id',  cid);
+  localStorage.setItem('tc-vision-key', vk);
+  bootApp();
+}
+
+function openSettings() {
+  localStorage.removeItem('tc-client-id');
+  localStorage.removeItem('tc-vision-key');
+  location.reload();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUTH
+// ─────────────────────────────────────────────────────────────────────────────
+function signIn() {
+  const poll = setInterval(() => {
+    if (!window.google?.accounts?.oauth2) return;
+    clearInterval(poll);
+    google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID, scope: SCOPES,
+      callback: async (r) => {
+        if (r.error) { toast('Sign-in failed: ' + r.error, true); return; }
+        token = r.access_token;
+        await loadUser();
+        document.getElementById('settings-btn').style.display = '';
+        document.getElementById('signout-btn').style.display  = '';
+        showScreen('folders');
+        loadFolders();
+      }
+    }).requestAccessToken();
+  }, 150);
+}
+
+async function loadUser() {
+  try {
+    const u = await gfetch('https://www.googleapis.com/oauth2/v3/userinfo');
+    const pill = document.getElementById('user-pill');
+    const av   = document.getElementById('u-avatar');
+    const nm   = document.getElementById('u-name');
+    if (u.picture) { av.src = u.picture; } else { av.style.display = 'none'; }
+    nm.textContent = u.name || u.email || '';
+    pill.style.display = 'flex';
+  } catch(_) {}
+}
+
+function signOut() {
+  token = null; photos = []; analyses = {}; selFolder = null; selPhoto = null;
+  document.getElementById('user-pill').style.display  = 'none';
+  document.getElementById('settings-btn').style.display = 'none';
+  document.getElementById('signout-btn').style.display  = 'none';
+  showScreen('signin');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DRIVE
+// ─────────────────────────────────────────────────────────────────────────────
+async function gfetch(url) {
+  const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!r.ok) throw new Error(`Drive error ${r.status}`);
+  return r.json();
+}
+
+async function loadFolders() {
+  document.getElementById('folder-sub').textContent = 'Loading folders…';
+  document.getElementById('folder-grid').innerHTML = '';
+  try {
+    const d = await gfetch(`${DRIVE_API}/files?q=mimeType%3D'application%2Fvnd.google-apps.folder'+and+trashed%3Dfalse&fields=files(id%2Cname)&pageSize=100&orderBy=name`);
+    const folders = d.files || [];
+    document.getElementById('folder-sub').textContent = folders.length
+      ? `${folders.length} folders found — pick your trapcam folder`
+      : 'No folders found in your Drive.';
+    const grid = document.getElementById('folder-grid');
+    folders.forEach(f => {
+      const el = document.createElement('div');
+      el.className = 'folder-card';
+      el.innerHTML = `<span class="fi">📁</span><span class="fn">${esc(f.name)}</span>`;
+      el.onclick = () => {
+        document.querySelectorAll('.folder-card').forEach(x => x.classList.remove('sel'));
+        el.classList.add('sel');
+        selFolder = f;
+        document.getElementById('open-btn').disabled = false;
+      };
+      grid.appendChild(el);
+    });
+  } catch(e) {
+    document.getElementById('folder-sub').textContent = 'Error: ' + e.message;
+  }
+}
+
+async function openFolder() {
+  if (!selFolder) return;
+  showScreen('analyse');
+  document.getElementById('folder-tag').textContent = selFolder.name;
+  photos = []; analyses = {}; selPhoto = null;
+  viewerPhotos = []; viewerShown = 0; viewerSelection = [];
+  renderDetail(null);
+  document.getElementById('photo-grid').innerHTML = '<div class="grid-empty">Loading photos…</div>';
+  try {
+    const all = [];
+    let pageToken = '';
+    do {
+      const tokenParam = pageToken ? `&pageToken=${pageToken}` : '';
+      const d = await gfetch(`${DRIVE_API}/files?q='${selFolder.id}'+in+parents+and+mimeType+contains+'image%2F'+and+trashed%3Dfalse&fields=files(id%2Cname%2CmimeType%2CmodifiedTime%2CthumbnailLink)%2CnextPageToken&pageSize=1000&orderBy=name${tokenParam}`);
+      all.push(...(d.files || []));
+      pageToken = d.nextPageToken || '';
+      if (pageToken) document.getElementById('photo-grid').innerHTML = `<div class="grid-empty">Loading photos… (${all.length} so far)</div>`;
+    } while (pageToken);
+    photos = all;
+    if (!photos.length) { document.getElementById('photo-grid').innerHTML = '<div class="grid-empty">No images found in this folder.</div>'; return; }
+    initAnalyseList();
+    toast(`${photos.length} photos loaded`);
+  } catch(e) {
+    document.getElementById('photo-grid').innerHTML = `<div class="grid-empty">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+function goBack() { showScreen('folders'); }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VISION ANALYSIS
+// ─────────────────────────────────────────────────────────────────────────────
+async function analysePhoto(photo) {
+  if (analyses[photo.id]?.done) return;
+  analyses[photo.id] = { loading: true };
+  if (selPhoto?.id === photo.id) renderDetail(photo);
+  renderCard(photo);
+
+  try {
+    // 1. Download image as base64
+    const imgResp = await fetch(
+      `${DRIVE_API}/files/${photo.id}?alt=media`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!imgResp.ok) throw new Error('Could not download image from Drive.');
+    const blob   = await imgResp.blob();
+    const b64    = await blobToBase64(blob);
+    const mime   = photo.mimeType || 'image/jpeg';
+
+    // 2. Send to Google Vision
+    const vResp = await fetch(`${VISION_API}?key=${VISION_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        requests: [{
+          image: { content: b64 },
+          features: [
+            { type: 'LABEL_DETECTION',  maxResults: 20 },
+            { type: 'OBJECT_LOCALIZATION', maxResults: 10 },
+          ]
+        }]
+      })
+    });
+    if (!vResp.ok) throw new Error(`Vision API error ${vResp.status}`);
+    const vData = await vResp.json();
+    const resp  = vData.responses?.[0];
+    if (resp?.error) throw new Error(resp.error.message);
+
+    // 3. Collect all labels + objects
+    const labels = [
+      ...(resp.labelAnnotations    || []).map(l => ({ name: l.description.toLowerCase(), score: l.score })),
+      ...(resp.localizedObjectAnnotations || []).map(o => ({ name: o.name.toLowerCase(), score: o.score })),
+    ];
+
+    // 4. Check against FLAG_LABELS
+    const flagHits = labels.filter(l => FLAG_LABELS.some(f => l.name.includes(f)));
+    const flagged  = flagHits.length > 0;
+
+    analyses[photo.id] = {
+      done: true, flagged,
+      labels: labels.map(l => l.name),
+      flagHits: flagHits.map(l => l.name),
+      topLabels: labels.slice(0, 8).map(l => l.name),
+    };
+  } catch(e) {
+    analyses[photo.id] = { done: true, error: e.message };
+  }
+
+  if (selPhoto?.id === photo.id) renderDetail(photo);
+  updateStats(); renderCard(photo);
+}
+
+async function analyseAll() {
+  if (busy) return;
+  busy = true;
+  const queue = analyseList.slice(0, analyseShown).filter(p => !analyses[p.id]?.done);
+  if (!queue.length) { toast('All photos already analysed.'); busy = false; return; }
+
+  const pw   = document.getElementById('prog-wrap');
+  const fill = document.getElementById('prog-fill');
+  const lbl  = document.getElementById('prog-lbl');
+  pw.style.display = 'block';
+  document.getElementById('btn-all').disabled = true;
+
+  for (let i = 0; i < queue.length; i++) {
+    lbl.textContent  = `Analysing ${i + 1} of ${queue.length} — ${queue[i].name}`;
+    fill.style.width = Math.round((i / queue.length) * 100) + '%';
+    await analysePhoto(queue[i]);
+  }
+
+  fill.style.width = '100%';
+  const nFlag = photos.filter(p => analyses[p.id]?.flagged).length;
+  lbl.textContent = `Done — ${nFlag} photo${nFlag !== 1 ? 's' : ''} flagged.`;
+  setTimeout(() => { pw.style.display = 'none'; }, 3000);
+  document.getElementById('btn-all').disabled = false;
+  busy = false;
+  toast(`Analysis complete — ${nFlag} flagged`);
+}
+
+async function analyseOne() {
+  if (!selPhoto || busy) return;
+  busy = true;
+  document.getElementById('btn-one').disabled = true;
+  await analysePhoto(selPhoto);
+  document.getElementById('btn-one').disabled = false;
+  busy = false;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RENDER
+// ─────────────────────────────────────────────────────────────────────────────
+function renderGrid() {
+  const grid = document.getElementById('photo-grid');
+  const base = analyseList.slice(0, analyseShown);
+  const list = base.filter(p => {
+    if (activeFilter === 'flag') return analyses[p.id]?.flagged === true;
+    if (activeFilter === 'ok')   return analyses[p.id]?.done && !analyses[p.id]?.error && !analyses[p.id]?.flagged;
+    if (activeFilter === 'pend') return !analyses[p.id]?.done;
+    return true;
+  });
+  if (!list.length) { grid.innerHTML = '<div class="grid-empty">No photos in this category.</div>'; return; }
+  grid.innerHTML = '';
+  list.forEach(p => grid.appendChild(buildCard(p)));
+}
+
+function renderCard(p) {
+  const el = document.querySelector(`.pc[data-id="${p.id}"]`);
+  if (el) el.replaceWith(buildCard(p));
+}
+
+function buildCard(p) {
+  const a  = analyses[p.id];
+  const el = document.createElement('div');
+  const isSel = compareMode && compareSelection.has(p.id);
+  el.className = 'pc' + (selPhoto?.id === p.id ? ' pc-active' : '') + (a?.flagged ? ' pc-flag' : a?.done && !a?.error ? ' pc-ok' : '') + (isSel ? ' pc-selected' : '');
+  el.dataset.id = p.id;
+  const badge = a?.loading ? '<span class="pbadge pb-busy">…</span>'
+    : a?.flagged  ? '<span class="pbadge pb-flag">FLAGGED</span>'
+    : a?.done && !a?.error ? '<span class="pbadge pb-ok">OK</span>'
+    : '';
+  const thumb = p.thumbnailLink
+    ? `<img class="pc-thumb" src="${p.thumbnailLink}" alt="" loading="lazy">`
+    : `<div class="pc-ph">📷</div>`;
+  const check = `<div class="pc-check${compareMode ? ' show' : ''}">${isSel ? '✓' : ''}</div>`;
+  el.innerHTML = `${badge}${check}${thumb}<div class="pc-foot"><div class="pc-name">${esc(p.name)}</div></div>`;
+  el.onclick = () => {
+    if (compareMode) {
+      if (compareSelection.has(p.id)) compareSelection.delete(p.id);
+      else compareSelection.add(p.id);
+      renderCard(p);
+      updateCompareBtn();
+      return;
+    }
+    selPhoto = p;
+    document.querySelectorAll('.pc').forEach(x => x.classList.remove('pc-active'));
+    el.classList.add('pc-active');
+    renderDetail(p);
+    document.getElementById('btn-one').disabled = !!analyses[p.id]?.done || busy;
+  };
+  return el;
+}
+
+function toggleCompareMode() {
+  compareMode = !compareMode;
+  compareSelection.clear();
+  document.getElementById('btn-compare-mode').textContent = compareMode ? 'Cancel selection' : 'Select to compare';
+  document.getElementById('btn-compare-mode').classList.toggle('btn-primary', compareMode);
+  document.getElementById('btn-compare-mode').classList.toggle('btn-outline', !compareMode);
+  document.getElementById('btn-compare-go').style.display = compareMode ? '' : 'none';
+  updateCompareBtn();
+  renderGrid();
+}
+
+function updateCompareBtn() {
+  const btn = document.getElementById('btn-compare-go');
+  const n = compareSelection.size;
+  btn.textContent = `Compare selected (${n})`;
+  btn.disabled = n < 2;
+}
+
+function renderDetail(p) {
+  const panel = document.getElementById('detail');
+  if (!p) { panel.innerHTML = '<div class="d-empty">Select a photo to see details.</div>'; return; }
+  const a = analyses[p.id];
+  const imgHtml = p.thumbnailLink
+    ? `<img class="d-img" src="${p.thumbnailLink}" alt="">`
+    : `<div class="d-ph">📷</div>`;
+  const date = p.modifiedTime ? new Date(p.modifiedTime).toLocaleString() : '';
+
+  let vHtml = '';
+  if (!a) {
+    vHtml = `<div class="verdict v-idle"><div class="v-lbl">Not analysed</div><div class="v-text">Click "Analyse this photo" below.</div></div>`;
+  } else if (a.loading) {
+    vHtml = `<div class="verdict v-busy"><div class="v-lbl"><span class="spin"></span> Analysing</div><div class="v-text">Sending to Google Vision…</div></div>`;
+  } else if (a.error) {
+    vHtml = `<div class="verdict v-idle"><div class="v-lbl">Error</div><div class="v-text">${esc(a.error)}</div></div>`;
+  } else if (a.flagged) {
+    const chips = a.topLabels.map(l => `<span class="lchip${a.flagHits.includes(l) ? ' lc-flag' : ''}">${esc(l)}</span>`).join('');
+    vHtml = `<div class="verdict v-flag"><div class="v-lbl">⚠ Unusual — review this photo</div><div class="v-text">Detected: <strong>${esc(a.flagHits.join(', '))}</strong></div><div class="label-chips">${chips}</div></div>`;
+  } else {
+    const chips = a.topLabels.map(l => `<span class="lchip">${esc(l)}</span>`).join('');
+    vHtml = `<div class="verdict v-ok"><div class="v-lbl">✓ Nothing unusual</div><div class="v-text">Common scene detected.</div><div class="label-chips">${chips}</div></div>`;
+  }
+
+  const btnDis = (a?.done || busy) ? 'disabled' : '';
+  panel.innerHTML = `${imgHtml}<div class="d-body"><div class="d-name">${esc(p.name)}</div><div class="d-date">${date}</div>${vHtml}<button class="d-btn" onclick="analyseOne()" ${btnDis}>${a?.loading ? '<span class="spin"></span> Analysing…' : a?.done ? 'Analysed ✓' : 'Analyse this photo'}</button></div>`;
+}
+
+function updateStats() {
+  const base = analyseList.slice(0, analyseShown);
+  document.getElementById('st-tot').textContent  = base.length;
+  document.getElementById('st-flag').textContent = base.filter(p => analyses[p.id]?.flagged).length;
+  document.getElementById('st-ok').textContent   = base.filter(p => analyses[p.id]?.done && !analyses[p.id]?.error && !analyses[p.id]?.flagged).length;
+  document.getElementById('st-pend').textContent = base.filter(p => !analyses[p.id]?.done).length;
+  document.getElementById('analyse-status').textContent =
+    `Showing ${Math.min(analyseShown, analyseList.length)} of ${analyseList.length} photos`;
+  const moreBtn = document.getElementById('analyse-more-btn');
+  if (moreBtn) moreBtn.style.display = analyseShown < analyseList.length ? '' : 'none';
+}
+
+function setFilter(f, btn) {
+  activeFilter = f;
+  document.querySelectorAll('.fbtn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderGrid();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PIXEL DIFF COMPARISON
+// ─────────────────────────────────────────────────────────────────────────────
+async function loadImageEl(photoId) {
+  const r = await fetch(`${DRIVE_API}/files/${photoId}?alt=media`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!r.ok) throw new Error('Could not download image from Drive.');
+  const blob = await r.blob();
+  const url  = URL.createObjectURL(blob);
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload  = () => res({ img, url });
+    img.onerror = rej;
+    img.src = url;
+  });
+}
+
+async function runCompare() {
+  if (compareSelection.size < 2) return;
+  // Preserve the order photos appear in the grid
+  const ids = photos.filter(p => compareSelection.has(p.id)).map(p => p.id);
+  const ov  = document.getElementById('compare-overlay');
+  const body = document.getElementById('compare-body');
+  ov.classList.add('show');
+  body.innerHTML = '<div class="compare-loading">Loading images…</div>';
+
+  try {
+    const loaded = [];
+    for (const id of ids) {
+      const photo = photos.find(p => p.id === id);
+      const { img, url } = await loadImageEl(id);
+      loaded.push({ photo, img, url });
+    }
+
+    body.innerHTML = '';
+    const wrap = document.createElement('div');
+    wrap.className = 'compare-pairs';
+
+    for (let i = 0; i < loaded.length - 1; i++) {
+      const a = loaded[i], b = loaded[i+1];
+      const pairDiv = document.createElement('div');
+      const title = document.createElement('div');
+      title.className = 'compare-pair-title';
+      title.textContent = `${a.photo.name}  →  ${b.photo.name}`;
+      pairDiv.appendChild(title);
+
+      const grid = document.createElement('div');
+      grid.className = 'compare-canvases';
+
+      // Use the smaller of the two dimensions so both images map 1:1
+      const w = Math.min(a.img.naturalWidth,  b.img.naturalWidth,  640);
+      const h = Math.min(a.img.naturalHeight, b.img.naturalHeight, 480);
+
+      const c1 = makeCanvas(w, h, a.img, 'Photo A');
+      const c2 = makeCanvas(w, h, b.img, 'Photo B');
+      const c3 = makeDiffCanvas(w, h, a.img, b.img, 'Difference');
+
+      grid.appendChild(c1.wrap);
+      grid.appendChild(c2.wrap);
+      grid.appendChild(c3.wrap);
+      pairDiv.appendChild(grid);
+      wrap.appendChild(pairDiv);
+    }
+
+    body.appendChild(wrap);
+  } catch(e) {
+    body.innerHTML = `<div class="compare-loading">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+function makeCanvas(w, h, img, label) {
+  const wrap = document.createElement('div');
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, w, h);
+  const lbl = document.createElement('div');
+  lbl.className = 'compare-lbl';
+  lbl.textContent = label;
+  wrap.appendChild(canvas);
+  wrap.appendChild(lbl);
+  return { wrap, canvas };
+}
+
+function toGrayscale(imgData, w, h) {
+  const gray = new Float32Array(w * h);
+  const d = imgData.data;
+  for (let i = 0, j = 0; i < d.length; i += 4, j++) {
+    gray[j] = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
+  }
+  return gray;
+}
+
+// Simple 3x3 box blur to reduce sensor noise before edge detection
+function boxBlur(gray, w, h) {
+  const out = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let sum = 0, n = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx, yy = y + dy;
+          if (xx >= 0 && xx < w && yy >= 0 && yy < h) { sum += gray[yy*w+xx]; n++; }
+        }
+      }
+      out[y*w+x] = sum / n;
+    }
+  }
+  return out;
+}
+
+// Sobel edge magnitude — captures shape/contour, largely invariant to overall
+// brightness shifts (sun, shadow, exposure) since it's based on local gradients.
+function sobelMagnitude(gray, w, h) {
+  const out = new Float32Array(w * h);
+  const gx = [-1,0,1,-2,0,2,-1,0,1];
+  const gy = [-1,-2,-1,0,0,0,1,2,1];
+  for (let y = 1; y < h-1; y++) {
+    for (let x = 1; x < w-1; x++) {
+      let sx = 0, sy = 0, k = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const v = gray[(y+dy)*w + (x+dx)];
+          sx += v * gx[k]; sy += v * gy[k]; k++;
+        }
+      }
+      out[y*w+x] = Math.sqrt(sx*sx + sy*sy);
+    }
+  }
+  return out;
+}
+
+function makeDiffCanvas(w, h, imgA, imgB, label) {
+  // Draw both images into temp canvases at the shared size
+  const ca = document.createElement('canvas'); ca.width = w; ca.height = h;
+  const cb = document.createElement('canvas'); cb.width = w; cb.height = h;
+  ca.getContext('2d').drawImage(imgA, 0, 0, w, h);
+  cb.getContext('2d').drawImage(imgB, 0, 0, w, h);
+  const da = ca.getContext('2d').getImageData(0, 0, w, h);
+  const db = cb.getContext('2d').getImageData(0, 0, w, h);
+
+  // Grayscale + blur + Sobel edge map for each frame.
+  // Edges describe SHAPE/STRUCTURE, not absolute brightness, so this is
+  // far less sensitive to lighting/shadow changes than raw pixel diffs.
+  const edgesA = sobelMagnitude(boxBlur(toGrayscale(da, w, h), w, h), w, h);
+  const edgesB = sobelMagnitude(boxBlur(toGrayscale(db, w, h), w, h), w, h);
+
+  const out  = document.createElement('canvas'); out.width = w; out.height = h;
+  const octx = out.getContext('2d');
+  const od   = octx.createImageData(w, h);
+
+  const EDGE_DIFF_THRESHOLD = 45; // higher = less sensitive to noise/lighting
+  for (let i = 0, j = 0; i < od.data.length; i += 4, j++) {
+    const diff = Math.abs(edgesA[j] - edgesB[j]);
+    const changed = diff > EDGE_DIFF_THRESHOLD;
+    if (changed) {
+      // Highlight changed edges/shapes in bright magenta
+      od.data[i] = 255; od.data[i+1] = 0; od.data[i+2] = 200; od.data[i+3] = 255;
+    } else {
+      // Dim background = edge map of photo A, so unchanged structure is still visible
+      const g = Math.min(255, edgesA[j]) * 0.5;
+      od.data[i] = od.data[i+1] = od.data[i+2] = g;
+      od.data[i+3] = 255;
+    }
+  }
+  octx.putImageData(od, 0, 0);
+
+  const wrap = document.createElement('div');
+  const lbl = document.createElement('div');
+  lbl.className = 'compare-lbl';
+  lbl.textContent = label;
+  wrap.appendChild(out);
+  wrap.appendChild(lbl);
+  return { wrap, canvas: out };
+}
+
+function closeCompare() {
+  document.getElementById('compare-overlay').classList.remove('show');
+  document.getElementById('compare-body').innerHTML = '';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VIEWER TAB
+// ─────────────────────────────────────────────────────────────────────────────
+function switchMode(mode, btn) {
+  document.querySelectorAll('.tab-switch button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('mode-analyse').style.display = mode === 'analyse' ? '' : 'none';
+  document.getElementById('mode-viewer').style.display  = mode === 'viewer'  ? '' : 'none';
+  if (mode === 'viewer' && !viewerPhotos.length) {
+    initViewer();
+  }
+}
+
+function sortedByDateDesc(list) {
+  return [...list].sort((a, b) => {
+    const ta = a.modifiedTime ? new Date(a.modifiedTime).getTime() : 0;
+    const tb = b.modifiedTime ? new Date(b.modifiedTime).getTime() : 0;
+    return tb - ta; // newest first
+  });
+}
+
+// ── ANALYSER LIST (latest N / date range, same approach as Viewer) ─────────
+function initAnalyseList() {
+  analyseFilterMode = 'count';
+  analyseList  = sortedByDateDesc(photos).slice(0, 12);
+  analyseShown = analyseList.length;
+  updateStats();
+  renderGrid();
+}
+
+function toggleAnalyseFilterPanel() {
+  document.getElementById('analyse-filter-panel').classList.toggle('show');
+}
+
+function setAnalyseFilterMode(mode, btn) {
+  analyseFilterMode = mode;
+  document.querySelectorAll('#analyse-filter-mode-seg button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('analyse-filter-count-row').style.display = mode === 'count' ? '' : 'none';
+  document.getElementById('analyse-filter-date-row').style.display  = mode === 'date'  ? '' : 'none';
+}
+
+function applyAnalyseFilter() {
+  const all = sortedByDateDesc(photos);
+  if (analyseFilterMode === 'count') {
+    const val = document.getElementById('af-count').value;
+    analyseList = val === 'all' ? all : all.slice(0, parseInt(val, 10));
+  } else {
+    const fromVal = document.getElementById('af-from').value;
+    const toVal   = document.getElementById('af-to').value;
+    const from = fromVal ? new Date(fromVal + 'T00:00:00').getTime() : -Infinity;
+    const to   = toVal   ? new Date(toVal   + 'T23:59:59').getTime() :  Infinity;
+    analyseList = all.filter(p => {
+      const t = p.modifiedTime ? new Date(p.modifiedTime).getTime() : 0;
+      return t >= from && t <= to;
+    });
+  }
+  analyseShown = Math.min(12, analyseList.length);
+  updateStats();
+  renderGrid();
+  document.getElementById('analyse-filter-panel').classList.remove('show');
+}
+
+function loadMoreAnalyse() {
+  analyseShown = Math.min(analyseShown + 12, analyseList.length);
+  updateStats();
+  renderGrid();
+}
+
+function initViewer() {
+  viewerFilterMode = 'count';
+  viewerCount      = 12;
+  viewerDateFrom   = null;
+  viewerDateTo     = null;
+  viewerSelection  = [];
+  viewerPhotos     = sortedByDateDesc(photos).slice(0, 12);
+  viewerShown      = viewerPhotos.length;
+  renderViewerGrid();
+  updateViewerStatus();
+  updateViewerMoreBtn();
+  updateVselBar();
+}
+
+function toggleFilterPanel() {
+  document.getElementById('filter-panel').classList.toggle('show');
+}
+
+function setFilterMode(mode, btn) {
+  viewerFilterMode = mode;
+  document.querySelectorAll('#filter-mode-seg button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('filter-count-row').style.display = mode === 'count' ? '' : 'none';
+  document.getElementById('filter-date-row').style.display  = mode === 'date'  ? '' : 'none';
+}
+
+function applyViewerFilter() {
+  const all = sortedByDateDesc(photos);
+  if (viewerFilterMode === 'count') {
+    const val = document.getElementById('vf-count').value;
+    viewerPhotos = val === 'all' ? all : all.slice(0, parseInt(val, 10));
+  } else {
+    const fromVal = document.getElementById('vf-from').value;
+    const toVal   = document.getElementById('vf-to').value;
+    const from = fromVal ? new Date(fromVal + 'T00:00:00').getTime() : -Infinity;
+    const to   = toVal   ? new Date(toVal   + 'T23:59:59').getTime() :  Infinity;
+    viewerPhotos = all.filter(p => {
+      const t = p.modifiedTime ? new Date(p.modifiedTime).getTime() : 0;
+      return t >= from && t <= to;
+    });
+  }
+  viewerShown = Math.min(12, viewerPhotos.length);
+  viewerSelection = [];
+  renderViewerGrid();
+  updateViewerStatus();
+  updateViewerMoreBtn();
+  updateVselBar();
+  document.getElementById('filter-panel').classList.remove('show');
+}
+
+function loadMoreViewer() {
+  viewerShown = Math.min(viewerShown + 12, viewerPhotos.length);
+  renderViewerGrid();
+  updateViewerStatus();
+  updateViewerMoreBtn();
+}
+
+function updateViewerStatus() {
+  document.getElementById('viewer-status').textContent =
+    `Showing ${Math.min(viewerShown, viewerPhotos.length)} of ${viewerPhotos.length} photos`;
+}
+
+function updateViewerMoreBtn() {
+  const btn = document.getElementById('viewer-more-btn');
+  btn.style.display = viewerShown < viewerPhotos.length ? '' : 'none';
+}
+
+function renderViewerGrid() {
+  const grid = document.getElementById('viewer-grid');
+  grid.innerHTML = '';
+  if (!viewerPhotos.length) { grid.innerHTML = '<div class="grid-empty">No photos match this filter.</div>'; return; }
+  const slice = viewerPhotos.slice(0, viewerShown);
+  slice.forEach(p => grid.appendChild(buildViewerCard(p)));
+}
+
+function buildViewerCard(p) {
+  const el = document.createElement('div');
+  const selIdx = viewerSelection.indexOf(p.id);
+  el.className = 'vc' + (selIdx !== -1 ? ' vc-selected' : '');
+  el.dataset.id = p.id;
+  const thumb = p.thumbnailLink
+    ? `<img class="vc-thumb" src="${p.thumbnailLink}" alt="" loading="lazy">`
+    : `<div class="vc-ph">📷</div>`;
+  const dateStr = p.modifiedTime ? new Date(p.modifiedTime).toLocaleString([], { dateStyle:'short', timeStyle:'short' }) : '';
+  const order = selIdx !== -1 ? `<span class="vc-order">${selIdx + 1}</span>` : '';
+  el.innerHTML = `${order}<div class="vc-check">${selIdx !== -1 ? '✓' : ''}</div>${thumb}<div class="vc-foot"><div class="vc-name">${esc(p.name)}</div><div class="vc-date">${dateStr}</div></div>`;
+
+  el.onclick = (ev) => {
+    // Plain click (no modifier) on an unselected card with nothing selected → open single view
+    if (viewerSelection.length === 0) {
+      openView(p);
+      return;
+    }
+    toggleViewerSelect(p.id);
+  };
+  // Long-press / ctrl-click style alt entry point: small check area always toggles selection
+  const checkEl = el.querySelector('.vc-check');
+  checkEl.onclick = (ev) => { ev.stopPropagation(); toggleViewerSelect(p.id); };
+
+  return el;
+}
+
+function toggleViewerSelect(id) {
+  const idx = viewerSelection.indexOf(id);
+  if (idx !== -1) {
+    viewerSelection.splice(idx, 1);
+  } else {
+    viewerSelection.push(id);
+    if (viewerSelection.length > 2) viewerSelection.shift(); // keep last 2
+  }
+  renderViewerGrid();
+  updateVselBar();
+}
+
+function clearViewerSelection() {
+  viewerSelection = [];
+  renderViewerGrid();
+  updateVselBar();
+}
+
+function updateVselBar() {
+  const bar = document.getElementById('vsel-bar');
+  const lbl = document.getElementById('vsel-lbl');
+  const btn = document.getElementById('vsel-compare-btn');
+  if (viewerSelection.length === 0) { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  lbl.textContent = `${viewerSelection.length} selected — tap a photo's checkmark to select/deselect (max 2)`;
+  btn.disabled = viewerSelection.length !== 2;
+}
+
+// ── SINGLE IMAGE VIEW ───────────────────────────────────────────────────────
+let viewIndex = -1; // index into viewerPhotos (the grid's current order)
+
+function openView(p) {
+  viewIndex = viewerPhotos.findIndex(x => x.id === p.id);
+  renderView();
+  document.getElementById('view-overlay').classList.add('show');
+}
+
+function renderView() {
+  const p = viewerPhotos[viewIndex];
+  if (!p) return;
+  document.getElementById('view-img').src = p.thumbnailLink ? p.thumbnailLink.replace(/=s\d+/, '=s1600') : '';
+  document.getElementById('view-name').textContent = p.name;
+  document.getElementById('view-date').textContent = p.modifiedTime ? new Date(p.modifiedTime).toLocaleString() : '';
+  document.getElementById('view-prev').disabled = viewIndex <= 0;
+  document.getElementById('view-next').disabled = viewIndex >= viewerPhotos.length - 1;
+}
+
+function navView(dir) {
+  const next = viewIndex + dir;
+  if (next < 0 || next >= viewerPhotos.length) return;
+  viewIndex = next;
+  renderView();
+}
+
+function closeView() {
+  document.getElementById('view-overlay').classList.remove('show');
+}
+
+// Keyboard navigation: arrow keys move through the grid, Escape closes
+document.addEventListener('keydown', (ev) => {
+  if (!document.getElementById('view-overlay').classList.contains('show')) return;
+  if (ev.key === 'ArrowRight') { navView(1); ev.preventDefault(); }
+  else if (ev.key === 'ArrowLeft') { navView(-1); ev.preventDefault(); }
+  else if (ev.key === 'Escape') { closeView(); }
+});
+
+// ── BEFORE/AFTER SLIDER COMPARE ─────────────────────────────────────────────
+function openSliderCompare() {
+  if (viewerSelection.length !== 2) return;
+  const a = photos.find(p => p.id === viewerSelection[0]);
+  const b = photos.find(p => p.id === viewerSelection[1]);
+  const ta = a.modifiedTime ? new Date(a.modifiedTime).getTime() : 0;
+  const tb = b.modifiedTime ? new Date(b.modifiedTime).getTime() : 0;
+  const older = ta <= tb ? a : b;
+  const newer = ta <= tb ? b : a;
+
+  const olderUrl = older.thumbnailLink ? older.thumbnailLink.replace(/=s\d+/, '=s1600') : '';
+  const newerUrl = newer.thumbnailLink ? newer.thumbnailLink.replace(/=s\d+/, '=s1600') : '';
+
+  document.getElementById('slider-img-old').src = olderUrl;
+  document.getElementById('slider-img-new').src = newerUrl;
+  document.getElementById('slider-label-old').textContent = `OLDER · ${older.name}`;
+  document.getElementById('slider-label-new').textContent = `NEWER · ${newer.name}`;
+  document.getElementById('slider-title').textContent =
+    `${older.modifiedTime ? new Date(older.modifiedTime).toLocaleString() : ''}  →  ${newer.modifiedTime ? new Date(newer.modifiedTime).toLocaleString() : ''}`;
+
+  document.getElementById('slider-overlay').classList.add('show');
+  setSliderPos(50);
+  initSliderDrag();
+}
+
+function setSliderPos(pct) {
+  pct = Math.max(0, Math.min(100, pct));
+  // Top (newer) image is clipped from the LEFT as the handle moves left,
+  // revealing the bottom (older) image on the left side.
+  // At pct=50 (centre): right half shows newer (top), left half shows older (bottom).
+  document.getElementById('slider-img-new').style.clipPath = `inset(0 0 0 ${pct}%)`;
+  document.getElementById('slider-line').style.left  = pct + '%';
+  document.getElementById('slider-knob').style.left  = pct + '%';
+}
+
+function initSliderDrag() {
+  const wrap   = document.getElementById('slider-wrap');
+  const handle = document.getElementById('slider-handle');
+  let dragging = false;
+
+  function posFromEvent(ev) {
+    const rect = wrap.getBoundingClientRect();
+    const x = (ev.touches ? ev.touches[0].clientX : ev.clientX) - rect.left;
+    return (x / rect.width) * 100;
+  }
+
+  function onDown(ev) { dragging = true; setSliderPos(posFromEvent(ev)); ev.preventDefault(); }
+  function onMove(ev) { if (dragging) { setSliderPos(posFromEvent(ev)); ev.preventDefault(); } }
+  function onUp() { dragging = false; }
+
+  handle.onmousedown  = onDown;
+  handle.ontouchstart = onDown;
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('touchmove', onMove, { passive: false });
+  window.addEventListener('mouseup', onUp);
+  window.addEventListener('touchend', onUp);
+}
+
+function closeSlider() {
+  document.getElementById('slider-overlay').classList.remove('show');
+}
+
+
+function showScreen(n) {
+  ['signin','folders','analyse'].forEach(s =>
+    document.getElementById('screen-' + s).style.display = s === n ? 'block' : 'none'
+  );
+}
+
+function blobToBase64(blob) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload  = () => res(r.result.split(',')[1]);
+    r.onerror = rej;
+    r.readAsDataURL(blob);
+  });
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+let toastTimer;
+function toast(msg, err=false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show' + (err ? ' terr' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.className = '', 3200);
+}
+</script>
+</body>
+</html>
