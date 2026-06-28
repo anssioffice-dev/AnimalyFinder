@@ -1,0 +1,1060 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trapcam Viewer</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink:      #1a1a18; --ink2: #4a4a46; --ink3: #8a8a84;
+      --paper:    #f5f3ee; --surface: #eceae4; --line: #d8d5cc;
+      --blue:     #1a4a8a; --blue-bg: #eef3fb;
+      --ok:       #2a6e3a; --ok-bg: #edf6ef;
+      --r: 6px;
+      --mono: 'IBM Plex Mono', monospace;
+      --sans: 'IBM Plex Sans', sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { background: var(--paper); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.6; }
+    body { min-height: 100vh; }
+
+    /* ── SETUP ── */
+    #setup-overlay { position: fixed; inset: 0; background: #111110; display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 2rem; overflow-y: auto; }
+    #setup-overlay.hidden { display: none; }
+    .setup-card { max-width: 580px; width: 100%; }
+    .setup-logo { font-family: var(--mono); font-size: 20px; color: #fff; margin-bottom: 4px; }
+    .setup-logo span { color: #e87a50; }
+    .setup-tagline { font-size: 13px; color: #777; margin-bottom: 2rem; }
+    .setup-section { margin-bottom: 1.8rem; }
+    .setup-section-title { font-size: 11px; font-family: var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: #666; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #2a2a28; }
+    .setup-steps { counter-reset: s; }
+    .setup-step { counter-increment: s; display: flex; gap: 12px; margin-bottom: 12px; font-size: 13px; color: #999; line-height: 1.65; }
+    .setup-step::before { content: counter(s); min-width: 22px; height: 22px; border-radius: 50%; border: 1px solid #444; display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 11px; color: #777; flex-shrink: 0; margin-top: 2px; }
+    .setup-step a { color: #7ab0f0; text-decoration: none; }
+    .setup-step a:hover { text-decoration: underline; }
+    .setup-step code { background: #222220; padding: 1px 6px; border-radius: 3px; font-family: var(--mono); font-size: 11px; color: #ddd; }
+    .setup-step strong { color: #ccc; font-weight: 500; }
+    .setup-fields { display: flex; flex-direction: column; gap: 10px; margin-top: 1.2rem; }
+    .setup-field label { display: block; font-size: 11px; font-family: var(--mono); color: #666; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 5px; }
+    .setup-field input { width: 100%; background: #1a1a18; border: 1px solid #333; border-radius: var(--r); color: #eee; font-family: var(--mono); font-size: 12px; padding: 10px 14px; outline: none; transition: border-color 0.15s; }
+    .setup-field input:focus { border-color: #7ab0f0; }
+    .setup-field input::placeholder { color: #444; }
+    .setup-save-btn { margin-top: 1.2rem; width: 100%; padding: 12px; background: #e87a50; color: #fff; border: none; border-radius: var(--r); font-family: var(--sans); font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.15s; }
+    .setup-save-btn:hover { background: #f09070; }
+    .setup-privacy { font-size: 11px; color: #444; text-align: center; margin-top: 10px; line-height: 1.6; }
+
+    /* ── SHELL ── */
+    #shell { display: none; max-width: 960px; margin: 0 auto; padding: 1.5rem; }
+    #shell.visible { display: block; }
+
+    /* ── HEADER ── */
+    header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 1rem; border-bottom: 1px solid var(--line); margin-bottom: 1.5rem; flex-wrap: wrap; gap: 10px; }
+    .wordmark { font-family: var(--mono); font-size: 16px; color: var(--ink); }
+    .wordmark span { color: #e87a50; }
+    .header-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .user-pill { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink2); background: var(--surface); border-radius: 20px; padding: 5px 12px 5px 5px; }
+    .avatar { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; }
+    .btn-sm { background: #fff; border: 1px solid var(--line); border-radius: var(--r); padding: 5px 12px; font-size: 12px; color: var(--ink2); cursor: pointer; font-family: var(--sans); transition: border-color 0.13s; }
+    .btn-sm:hover { border-color: var(--ink3); color: var(--ink); }
+    .lang-toggle { display: flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+    .lang-toggle button { background: #fff; border: none; padding: 5px 10px; font-size: 12px; color: var(--ink2); cursor: pointer; font-family: var(--mono); transition: all 0.12s; }
+    .lang-toggle button.active { background: var(--ink); color: var(--paper); }
+
+    /* ── SIGN IN ── */
+    #screen-signin { text-align: center; padding: 5rem 2rem; }
+    .signin-title { font-family: var(--mono); font-size: 26px; margin-bottom: 8px; }
+    .signin-sub { color: var(--ink2); font-size: 14px; margin-bottom: 2rem; }
+    .btn-google { display: inline-flex; align-items: center; gap: 10px; background: #fff; border: 1px solid var(--line); border-radius: var(--r); padding: 12px 24px; font-size: 14px; font-weight: 500; color: var(--ink); cursor: pointer; font-family: var(--sans); transition: box-shadow 0.15s, border-color 0.15s; }
+    .btn-google:hover { border-color: #aaa; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .g-logo { width: 18px; height: 18px; }
+
+    /* ── FOLDER SCREEN ── */
+    #screen-folders { display: none; }
+    .screen-title { font-family: var(--mono); font-size: 18px; margin-bottom: 4px; }
+    .screen-sub { font-size: 13px; color: var(--ink2); margin-bottom: 1.2rem; }
+    .folder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; margin-bottom: 1.5rem; }
+    .folder-card { background: #fff; border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; cursor: pointer; display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--ink); transition: border-color 0.13s; }
+    .folder-card:hover { border-color: var(--ink3); }
+    .folder-card.sel { border-color: var(--blue); background: var(--blue-bg); color: var(--blue); }
+    .btn-primary { background: var(--ink); color: var(--paper); border: none; border-radius: var(--r); padding: 10px 20px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: var(--sans); transition: background 0.13s; display: inline-flex; align-items: center; gap: 7px; }
+    .btn-primary:hover { background: #2a2a28; }
+    .btn-primary:disabled { background: var(--surface); color: var(--ink3); cursor: not-allowed; }
+    .btn-outline { background: #fff; border: 1px solid var(--line); border-radius: var(--r); padding: 10px 20px; font-size: 13px; color: var(--ink); cursor: pointer; font-family: var(--sans); transition: border-color 0.13s; }
+    .btn-outline:hover { border-color: var(--ink3); }
+    .btn-outline:disabled { color: var(--ink3); cursor: not-allowed; }
+
+    /* ── VIEWER SCREEN ── */
+    #screen-viewer { display: none; }
+    .viewer-top { display: flex; align-items: center; gap: 10px; margin-bottom: 1.2rem; flex-wrap: wrap; }
+    .back-btn { background: none; border: 1px solid var(--line); border-radius: var(--r); padding: 7px 13px; font-size: 13px; color: var(--ink2); cursor: pointer; font-family: var(--sans); }
+    .back-btn:hover { border-color: var(--ink3); color: var(--ink); }
+    .folder-tag { font-family: var(--mono); font-size: 13px; color: var(--ink2); background: var(--surface); padding: 5px 10px; border-radius: var(--r); }
+    .viewer-ctrl { display: flex; gap: 8px; align-items: center; margin-bottom: 0.8rem; flex-wrap: wrap; }
+    .viewer-status { font-size: 12px; font-family: var(--mono); color: var(--ink3); }
+    .filter-panel { background: #fff; border: 1px solid var(--line); border-radius: var(--r); padding: 14px; margin-bottom: 1rem; display: none; }
+    .filter-panel.show { display: block; }
+    .filter-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+    .filter-row:last-child { margin-bottom: 0; }
+    .filter-row label { font-size: 11px; font-family: var(--mono); color: var(--ink3); letter-spacing: 0.07em; text-transform: uppercase; min-width: 70px; }
+    .filter-row input, .filter-row select { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 6px 10px; font-size: 12px; font-family: var(--sans); color: var(--ink); }
+    .seg { display: flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+    .seg button { background: #fff; border: none; border-right: 1px solid var(--line); padding: 6px 14px; font-size: 12px; color: var(--ink2); cursor: pointer; font-family: var(--sans); }
+    .seg button:last-child { border-right: none; }
+    .seg button.active { background: var(--ink); color: var(--paper); }
+
+    .vsel-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; background: var(--blue-bg); border: 1px solid #b8ccee; border-radius: var(--r); padding: 8px 12px; }
+    .vsel-bar .lbl { font-size: 12px; color: var(--blue); font-family: var(--mono); flex: 1; }
+
+    .viewer-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 1rem; }
+    .vc { background: #fff; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; cursor: pointer; position: relative; transition: border-color 0.12s; }
+    .vc:hover { border-color: var(--ink3); }
+    .vc.vc-sel { outline: 2px solid var(--blue); outline-offset: -2px; }
+    .vc-thumb { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; background: var(--surface); }
+    .vc-ph { width: 100%; aspect-ratio: 4/3; background: var(--surface); display: flex; align-items: center; justify-content: center; font-size: 22px; }
+    .vc-foot { padding: 5px 7px; }
+    .vc-name { font-size: 10px; font-family: var(--mono); color: var(--ink3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .vc-date { font-size: 10px; font-family: var(--mono); color: var(--ink3); opacity: 0.7; }
+    .vc-check { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 4px; background: rgba(255,255,255,0.85); border: 1.5px solid var(--ink3); display: flex; align-items: center; justify-content: center; font-size: 12px; z-index: 2; }
+    .vc.vc-sel .vc-check { background: var(--blue); border-color: var(--blue); color: #fff; }
+    .vc-order { position: absolute; top: 4px; left: 4px; font-size: 10px; font-family: var(--mono); font-weight: 500; padding: 2px 6px; border-radius: 3px; background: var(--blue); color: #fff; z-index: 2; }
+    .load-more-wrap { display: flex; justify-content: center; margin-top: 0.5rem; }
+
+    /* ── SINGLE IMAGE VIEW ── */
+    #view-overlay { position: fixed; inset: 0; background: rgba(15,15,12,0.95); z-index: 800; display: none; flex-direction: column; align-items: center; justify-content: center; }
+    #view-overlay.show { display: flex; }
+    .ov-topbar { position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; z-index: 10; background: linear-gradient(180deg, rgba(0,0,0,0.5) 0%, transparent 100%); }
+    .ov-meta { color: #ddd; font-size: 12px; font-family: var(--mono); display: flex; flex-direction: column; gap: 2px; }
+    .ov-btns { display: flex; gap: 8px; }
+    .ov-btn { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25); border-radius: var(--r); padding: 6px 12px; font-size: 12px; color: #fff; cursor: pointer; font-family: var(--sans); backdrop-filter: blur(4px); transition: background 0.13s; display: flex; align-items: center; gap: 5px; }
+    .ov-btn:hover { background: rgba(255,255,255,0.25); }
+    #view-img { max-width: 96vw; max-height: 88vh; object-fit: contain; border-radius: var(--r); }
+    .view-nav { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.1); border: none; color: #fff; font-size: 36px; width: 52px; height: 64px; border-radius: var(--r); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.13s; }
+    .view-nav:hover { background: rgba(255,255,255,0.22); }
+    .view-nav:disabled { opacity: 0.2; cursor: not-allowed; }
+    #view-prev { left: 12px; }
+    #view-next { right: 12px; }
+
+    /* ── COMPARE CHOICE ── */
+    #compare-choice { position: fixed; inset: 0; background: rgba(15,15,12,0.85); z-index: 810; display: none; align-items: center; justify-content: center; }
+    #compare-choice.show { display: flex; }
+    .choice-card { background: var(--paper); border-radius: var(--r); padding: 2rem; max-width: 380px; width: 90%; text-align: center; }
+    .choice-title { font-family: var(--mono); font-size: 16px; margin-bottom: 8px; }
+    .choice-sub { font-size: 13px; color: var(--ink2); margin-bottom: 1.5rem; }
+    .choice-btns { display: flex; flex-direction: column; gap: 10px; }
+    .choice-btn { padding: 12px; border-radius: var(--r); border: 1px solid var(--line); background: #fff; font-family: var(--sans); font-size: 13px; cursor: pointer; transition: all 0.13s; text-align: left; display: flex; flex-direction: column; gap: 3px; }
+    .choice-btn:hover { border-color: var(--blue); background: var(--blue-bg); }
+    .choice-btn strong { font-size: 14px; color: var(--ink); }
+    .choice-btn span { font-size: 12px; color: var(--ink3); }
+    .choice-cancel { margin-top: 10px; background: none; border: none; font-size: 13px; color: var(--ink3); cursor: pointer; font-family: var(--sans); }
+
+    /* ── SLIDER COMPARE ── */
+    #slider-overlay { position: fixed; inset: 0; background: rgba(15,15,12,0.95); z-index: 820; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 1rem; }
+    #slider-overlay.show { display: flex; }
+    .slider-topbar { width: 100%; max-width: 920px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 8px; }
+    .slider-info { color: #aaa; font-size: 11px; font-family: var(--mono); }
+    .slider-wrap { position: relative; width: 100%; max-width: 920px; aspect-ratio: 4/3; border-radius: var(--r); overflow: hidden; background: #111; user-select: none; touch-action: none; }
+    .slider-wrap img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+    .sl-bottom { z-index: 1; }
+    .sl-top { z-index: 2; }
+    .sl-handle { position: absolute; inset: 0; z-index: 3; cursor: ew-resize; }
+    .sl-line { position: absolute; top: 0; bottom: 0; width: 2px; background: #fff; box-shadow: 0 0 8px rgba(0,0,0,0.7); z-index: 4; pointer-events: none; }
+    .sl-knob { position: absolute; top: 50%; width: 38px; height: 38px; border-radius: 50%; background: #fff; transform: translate(-50%, -50%); display: flex; align-items: center; justify-content: center; font-size: 15px; color: var(--ink); box-shadow: 0 2px 10px rgba(0,0,0,0.5); z-index: 5; pointer-events: none; }
+    .sl-lbl { position: absolute; bottom: 10px; font-size: 10px; font-family: var(--mono); font-weight: 500; padding: 3px 9px; border-radius: 3px; background: rgba(0,0,0,0.65); color: #fff; z-index: 4; letter-spacing: 0.06em; }
+    .sl-lbl-left { left: 10px; }
+    .sl-lbl-right { right: 10px; }
+    .slider-foot { color: #666; font-size: 11px; font-family: var(--mono); margin-top: 8px; text-align: center; }
+
+    /* ── DIFF OVERLAY ── */
+    #diff-overlay { position: fixed; inset: 0; background: rgba(15,15,12,0.95); z-index: 820; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 1rem; overflow-y: auto; }
+    #diff-overlay.show { display: flex; }
+    .diff-topbar { width: 100%; max-width: 960px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 8px; }
+    .diff-info { color: #aaa; font-size: 11px; font-family: var(--mono); }
+    .diff-canvases { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 100%; max-width: 960px; }
+    @media (max-width: 600px) { .diff-canvases { grid-template-columns: 1fr; } }
+    .diff-col { display: flex; flex-direction: column; gap: 5px; }
+    .diff-col canvas, .diff-col img { width: 100%; border-radius: var(--r); border: 1px solid #333; background: #111; display: block; aspect-ratio: 4/3; object-fit: contain; }
+    .diff-lbl { font-size: 10px; font-family: var(--mono); color: #666; text-align: center; letter-spacing: 0.07em; text-transform: uppercase; }
+    .diff-loading { font-size: 13px; font-family: var(--mono); color: #666; padding: 2rem; }
+
+    /* ── FULLSCREEN ── */
+    :fullscreen { background: #000; }
+    :-webkit-full-screen { background: #000; }
+
+    /* ── TOAST ── */
+    #toast { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%) translateY(8px); background: var(--ink); color: var(--paper); padding: 8px 20px; border-radius: 20px; font-size: 12px; font-family: var(--mono); opacity: 0; transition: all 0.22s; pointer-events: none; z-index: 999; white-space: nowrap; }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+
+<!-- SETUP -->
+<div id="setup-overlay">
+  <div class="setup-card">
+    <div class="setup-logo">trapcam<span>.</span>viewer</div>
+    <div class="setup-tagline" data-t="setup-tagline">One-time setup — about 5 minutes</div>
+    <div class="setup-section">
+      <div class="setup-section-title" data-t="setup-step1-title">1 — Google Cloud project</div>
+      <div class="setup-steps">
+        <div class="setup-step" data-t="setup-step1a">Go to <a href="https://console.cloud.google.com" target="_blank">console.cloud.google.com</a> and create a new project.</div>
+        <div class="setup-step" data-t="setup-step1b">Go to <strong>APIs &amp; Services → Library</strong> and enable <code>Google Drive API</code>.</div>
+      </div>
+    </div>
+    <div class="setup-section">
+      <div class="setup-section-title" data-t="setup-step2-title">2 — OAuth Client ID (Drive login)</div>
+      <div class="setup-steps">
+        <div class="setup-step" data-t="setup-step2a">Go to <strong>OAuth consent screen</strong>. Choose <strong>External</strong>. Fill in an app name and your email. Add all users under <strong>Test users</strong>.</div>
+        <div class="setup-step" data-t="setup-step2b">Go to <strong>Credentials → Create Credentials → OAuth 2.0 Client ID</strong>. Type: <strong>Web application</strong>. Add your hosting URL under <strong>Authorised JavaScript origins</strong>. Copy the Client ID.</div>
+      </div>
+    </div>
+    <div class="setup-section">
+      <div class="setup-section-title" data-t="setup-step3-title">3 — Paste your keys</div>
+      <div class="setup-fields">
+        <div class="setup-field">
+          <label data-t="setup-label-clientid">OAuth Client ID</label>
+          <input type="text" id="in-client-id" placeholder="123456789-abc….apps.googleusercontent.com">
+        </div>
+      </div>
+      <button class="setup-save-btn" onclick="saveSetup()" data-t="setup-save">Save &amp; open app →</button>
+      <div class="setup-privacy" data-t="setup-privacy">Your key is saved only in this browser. Photos go directly to Google — nothing passes through any third-party server.</div>
+    </div>
+  </div>
+</div>
+
+<!-- SHELL -->
+<div id="shell">
+  <header>
+    <div class="wordmark">trapcam<span>.</span>viewer</div>
+    <div class="header-right">
+      <div class="lang-toggle">
+        <button onclick="setLang('fi')" id="lang-fi" class="active">FI</button>
+        <button onclick="setLang('en')" id="lang-en">EN</button>
+      </div>
+      <div class="user-pill" id="user-pill" style="display:none">
+        <img class="avatar" id="u-avatar" src="" alt="">
+        <span id="u-name"></span>
+      </div>
+      <button class="btn-sm" id="settings-btn" onclick="openSettings()" style="display:none" data-t="btn-settings">Settings</button>
+      <button class="btn-sm" id="signout-btn" onclick="signOut()" style="display:none" data-t="btn-signout">Sign out</button>
+    </div>
+  </header>
+
+  <!-- SIGN IN -->
+  <div id="screen-signin">
+    <div class="signin-title" data-t="signin-title">// kirjaudu sisään</div>
+    <div class="signin-sub" data-t="signin-sub">Yhdistä Google-tilisi selataksesi trapcam-kansioita.</div>
+    <button class="btn-google" onclick="signIn()">
+      <svg class="g-logo" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+      <span data-t="btn-google-signin">Kirjaudu Google-tilillä</span>
+    </button>
+  </div>
+
+  <!-- FOLDERS -->
+  <div id="screen-folders">
+    <div class="screen-title" data-t="folders-title">Valitse kansio</div>
+    <div class="screen-sub" id="folder-sub" data-t="folders-loading">Ladataan kansioita…</div>
+    <div class="folder-grid" id="folder-grid"></div>
+    <button class="btn-primary" id="open-btn" onclick="openFolder()" disabled data-t="btn-open-folder">Avaa kansio</button>
+  </div>
+
+  <!-- VIEWER -->
+  <div id="screen-viewer">
+    <div class="viewer-top">
+      <button class="back-btn" onclick="goBack()" data-t="btn-back">← Takaisin</button>
+      <span class="folder-tag" id="folder-tag"></span>
+    </div>
+    <div class="viewer-ctrl">
+      <button class="btn-outline" onclick="toggleFilterPanel()" data-t="btn-filter">Suodata / Lisää</button>
+      <span class="viewer-status" id="viewer-status"></span>
+    </div>
+    <div class="filter-panel" id="filter-panel">
+      <div class="filter-row">
+        <label data-t="filter-mode">Tila</label>
+        <div class="seg" id="filter-mode-seg">
+          <button class="active" onclick="setFilterMode('count',this)" data-t="filter-latest-n">Uusimmat N</button>
+          <button onclick="setFilterMode('date',this)" data-t="filter-date-range">Päivämäärä</button>
+        </div>
+      </div>
+      <div class="filter-row" id="filter-count-row">
+        <label data-t="filter-count">Määrä</label>
+        <select id="vf-count">
+          <option value="12">12</option>
+          <option value="24">24</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+          <option value="all" data-t="filter-all">Kaikki</option>
+        </select>
+      </div>
+      <div class="filter-row" id="filter-date-row" style="display:none">
+        <label data-t="filter-from">Alkaen</label>
+        <input type="date" id="vf-from">
+        <label style="min-width:40px" data-t="filter-to">Asti</label>
+        <input type="date" id="vf-to">
+      </div>
+      <div class="filter-row">
+        <button class="btn-primary" onclick="applyFilter()" data-t="btn-apply">Käytä</button>
+      </div>
+    </div>
+    <div class="vsel-bar" id="vsel-bar" style="display:none">
+      <span class="lbl" id="vsel-lbl"></span>
+      <button class="btn-primary" id="vsel-compare-btn" onclick="openCompareChoice()" disabled data-t="btn-compare">Vertaa</button>
+      <button class="btn-outline" onclick="clearSelection()" data-t="btn-clear-sel">Tyhjennä</button>
+    </div>
+    <div class="viewer-grid" id="viewer-grid"></div>
+    <div class="load-more-wrap">
+      <button class="btn-outline" id="more-btn" onclick="loadMore()" style="display:none" data-t="btn-load-more">Lataa lisää</button>
+    </div>
+  </div>
+</div>
+
+<!-- SINGLE VIEW -->
+<div id="view-overlay">
+  <div class="ov-topbar">
+    <div class="ov-meta">
+      <span id="view-name"></span>
+      <span id="view-date" style="opacity:0.6"></span>
+    </div>
+    <div class="ov-btns">
+      <button class="ov-btn" onclick="toggleFullscreen('view-overlay')" data-t="btn-fullscreen">⛶ <span data-t="btn-fullscreen-lbl">Koko näyttö</span></button>
+      <button class="ov-btn" onclick="closeView()" data-t="btn-close">✕ <span data-t="btn-close-lbl">Sulje</span></button>
+    </div>
+  </div>
+  <button class="view-nav" id="view-prev" onclick="navView(-1)">‹</button>
+  <img id="view-img" src="" alt="">
+  <button class="view-nav" id="view-next" onclick="navView(1)">›</button>
+</div>
+
+<!-- COMPARE CHOICE -->
+<div id="compare-choice">
+  <div class="choice-card">
+    <div class="choice-title" data-t="choice-title">Valitse vertailutapa</div>
+    <div class="choice-sub" data-t="choice-sub">Vanhempi kuva alhaalla, uudempi päällä.</div>
+    <div class="choice-btns">
+      <button class="choice-btn" onclick="openSlider()">
+        <strong data-t="choice-slider">⇔ Liukusäädin</strong>
+        <span data-t="choice-slider-desc">Vedä palkkia paljastaaksesi vanhan tai uuden kuvan.</span>
+      </button>
+      <button class="choice-btn" onclick="openDiff()">
+        <strong data-t="choice-diff">⊕ Reunavertailu</strong>
+        <span data-t="choice-diff-desc">Korostaa muotoja ja rakenteita jotka ovat muuttuneet.</span>
+      </button>
+    </div>
+    <button class="choice-cancel" onclick="closeChoice()" data-t="btn-cancel">Peruuta</button>
+  </div>
+</div>
+
+<!-- SLIDER -->
+<div id="slider-overlay">
+  <div class="slider-topbar">
+    <div class="slider-info" id="slider-info"></div>
+    <div class="ov-btns">
+      <button class="ov-btn" onclick="toggleFullscreen('slider-overlay')" data-t="btn-fullscreen">⛶ <span data-t="btn-fullscreen-lbl">Koko näyttö</span></button>
+      <button class="ov-btn" onclick="closeSlider()" data-t="btn-close">✕ <span data-t="btn-close-lbl">Sulje</span></button>
+    </div>
+  </div>
+  <div class="slider-wrap" id="slider-wrap">
+    <img class="sl-bottom" id="sl-img-old" src="" alt="">
+    <img class="sl-top" id="sl-img-new" src="" alt="">
+    <span class="sl-lbl sl-lbl-left" id="sl-lbl-old"></span>
+    <span class="sl-lbl sl-lbl-right" id="sl-lbl-new"></span>
+    <div class="sl-line" id="sl-line"></div>
+    <div class="sl-knob" id="sl-knob">⇔</div>
+    <div class="sl-handle" id="sl-handle"></div>
+  </div>
+  <div class="slider-foot" data-t="slider-foot">Vedä oikealle → vanha kuva näkyy · Vedä vasemmalle → uusi kuva näkyy</div>
+</div>
+
+<!-- DIFF -->
+<div id="diff-overlay">
+  <div class="diff-topbar">
+    <div class="diff-info" id="diff-info"></div>
+    <div class="ov-btns">
+      <button class="ov-btn" onclick="toggleFullscreen('diff-overlay')" data-t="btn-fullscreen">⛶ <span data-t="btn-fullscreen-lbl">Koko näyttö</span></button>
+      <button class="ov-btn" onclick="closeDiff()" data-t="btn-close">✕ <span data-t="btn-close-lbl">Sulje</span></button>
+    </div>
+  </div>
+  <div class="diff-canvases" id="diff-canvases">
+    <div class="diff-loading" data-t="diff-loading">Ladataan kuvia…</div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// TRANSLATIONS
+// ─────────────────────────────────────────────────────────────────────────────
+const T = {
+  fi: {
+    'setup-tagline':       'Kertaluonteinen asennus — noin 5 minuuttia',
+    'setup-step1-title':   '1 — Google Cloud -projekti',
+    'setup-step1a':        'Mene osoitteeseen <a href="https://console.cloud.google.com" target="_blank">console.cloud.google.com</a> ja luo uusi projekti.',
+    'setup-step1b':        'Mene kohtaan <strong>APIs & Services → Library</strong> ja ota käyttöön <code>Google Drive API</code>.',
+    'setup-step2-title':   '2 — OAuth-asiakastunnus (Drive-kirjautuminen)',
+    'setup-step2a':        'Mene kohtaan <strong>OAuth consent screen</strong>. Valitse <strong>External</strong>. Lisää kaikki käyttäjät kohtaan <strong>Test users</strong>.',
+    'setup-step2b':        'Mene kohtaan <strong>Credentials → Create Credentials → OAuth 2.0 Client ID</strong>. Tyyppi: <strong>Web application</strong>. Lisää hosting-URL kohtaan <strong>Authorised JavaScript origins</strong>. Kopioi Client ID.',
+    'setup-step3-title':   '3 — Liitä avaimesi',
+    'setup-label-clientid':'OAuth-asiakastunnus',
+    'setup-save':          'Tallenna ja avaa sovellus →',
+    'setup-privacy':       'Avain tallennetaan vain tähän selaimeen. Kuvat menevät suoraan Googlelle — mikään ei kulje kolmannen osapuolen palvelimen kautta.',
+    'btn-settings':        'Asetukset',
+    'btn-signout':         'Kirjaudu ulos',
+    'btn-google-signin':   'Kirjaudu Google-tilillä',
+    'signin-title':        '// kirjaudu sisään',
+    'signin-sub':          'Yhdistä Google-tilisi selataksesi trapcam-kansioita.',
+    'folders-title':       'Valitse kansio',
+    'folders-loading':     'Ladataan kansioita…',
+    'btn-open-folder':     'Avaa kansio',
+    'btn-back':            '← Takaisin',
+    'btn-filter':          'Suodata / Lisää',
+    'filter-mode':         'Tila',
+    'filter-latest-n':     'Uusimmat N',
+    'filter-date-range':   'Päivämäärä',
+    'filter-count':        'Määrä',
+    'filter-all':          'Kaikki',
+    'filter-from':         'Alkaen',
+    'filter-to':           'Asti',
+    'btn-apply':           'Käytä',
+    'btn-compare':         'Vertaa',
+    'btn-clear-sel':       'Tyhjennä',
+    'btn-load-more':       'Lataa lisää',
+    'btn-fullscreen':      '⛶',
+    'btn-fullscreen-lbl':  'Koko näyttö',
+    'btn-close':           '✕',
+    'btn-close-lbl':       'Sulje',
+    'vsel-lbl':            (n) => `${n} valittu — valitse enintään 2`,
+    'viewer-status':       (shown, total) => `Näytetään ${shown} / ${total} kuvaa`,
+    'choice-title':        'Valitse vertailutapa',
+    'choice-sub':          'Vanhempi kuva alhaalla, uudempi päällä.',
+    'choice-slider':       '⇔ Liukusäädin',
+    'choice-slider-desc':  'Vedä palkkia paljastaaksesi vanhan tai uuden kuvan.',
+    'choice-diff':         '⊕ Reunavertailu',
+    'choice-diff-desc':    'Korostaa muotoja ja rakenteita jotka ovat muuttuneet.',
+    'btn-cancel':          'Peruuta',
+    'slider-foot':         'Vedä oikealle → vanha kuva näkyy · Vedä vasemmalle → uusi kuva näkyy',
+    'sl-lbl-old':          'VANHEMPI',
+    'sl-lbl-new':          'UUDEMPI',
+    'diff-loading':        'Ladataan kuvia…',
+    'diff-lbl-a':          'Kuva A (vanhempi)',
+    'diff-lbl-b':          'Kuva B (uudempi)',
+    'diff-lbl-diff':       'Reunaero',
+    'toast-loaded':        (n) => `${n} kuvaa ladattu`,
+    'toast-no-images':     'Kansiossa ei ole kuvia.',
+    'toast-signin-fail':   (e) => `Kirjautuminen epäonnistui: ${e}`,
+    'folders-found':       (n) => `${n} kansiota löydetty`,
+    'folders-none':        'Kansioita ei löydetty.',
+    'folders-loading-more':(n) => `Ladataan kuvia… (${n} tähän mennessä)`,
+  },
+  en: {
+    'setup-tagline':       'One-time setup — about 5 minutes',
+    'setup-step1-title':   '1 — Google Cloud project',
+    'setup-step1a':        'Go to <a href="https://console.cloud.google.com" target="_blank">console.cloud.google.com</a> and create a new project.',
+    'setup-step1b':        'Go to <strong>APIs &amp; Services → Library</strong> and enable <code>Google Drive API</code>.',
+    'setup-step2-title':   '2 — OAuth Client ID (Drive login)',
+    'setup-step2a':        'Go to <strong>OAuth consent screen</strong>. Choose <strong>External</strong>. Add all users under <strong>Test users</strong>.',
+    'setup-step2b':        'Go to <strong>Credentials → Create Credentials → OAuth 2.0 Client ID</strong>. Type: <strong>Web application</strong>. Add your hosting URL under <strong>Authorised JavaScript origins</strong>. Copy the Client ID.',
+    'setup-step3-title':   '3 — Paste your keys',
+    'setup-label-clientid':'OAuth Client ID',
+    'setup-save':          'Save & open app →',
+    'setup-privacy':       'Your key is saved only in this browser. Photos go directly to Google — nothing passes through any third-party server.',
+    'btn-settings':        'Settings',
+    'btn-signout':         'Sign out',
+    'btn-google-signin':   'Sign in with Google',
+    'signin-title':        '// sign in',
+    'signin-sub':          'Connect your Google account to browse trapcam folders.',
+    'folders-title':       'Choose a folder',
+    'folders-loading':     'Loading folders…',
+    'btn-open-folder':     'Open folder',
+    'btn-back':            '← Back',
+    'btn-filter':          'Filter / Get more',
+    'filter-mode':         'Mode',
+    'filter-latest-n':     'Latest N',
+    'filter-date-range':   'Date range',
+    'filter-count':        'Count',
+    'filter-all':          'All',
+    'filter-from':         'From',
+    'filter-to':           'To',
+    'btn-apply':           'Apply',
+    'btn-compare':         'Compare',
+    'btn-clear-sel':       'Clear',
+    'btn-load-more':       'Load more',
+    'btn-fullscreen':      '⛶',
+    'btn-fullscreen-lbl':  'Full screen',
+    'btn-close':           '✕',
+    'btn-close-lbl':       'Close',
+    'vsel-lbl':            (n) => `${n} selected — max 2`,
+    'viewer-status':       (shown, total) => `Showing ${shown} of ${total} photos`,
+    'choice-title':        'Choose compare mode',
+    'choice-sub':          'Older image on bottom, newer on top.',
+    'choice-slider':       '⇔ Slider',
+    'choice-slider-desc':  'Drag the handle to reveal the older or newer image.',
+    'choice-diff':         '⊕ Edge diff',
+    'choice-diff-desc':    'Highlights shapes and structures that have changed.',
+    'btn-cancel':          'Cancel',
+    'slider-foot':         'Drag right → older photo visible · Drag left → newer photo visible',
+    'sl-lbl-old':          'OLDER',
+    'sl-lbl-new':          'NEWER',
+    'diff-loading':        'Loading images…',
+    'diff-lbl-a':          'Photo A (older)',
+    'diff-lbl-b':          'Photo B (newer)',
+    'diff-lbl-diff':       'Edge diff',
+    'toast-loaded':        (n) => `${n} photos loaded`,
+    'toast-no-images':     'No images found in this folder.',
+    'toast-signin-fail':   (e) => `Sign-in failed: ${e}`,
+    'folders-found':       (n) => `${n} folders found`,
+    'folders-none':        'No folders found.',
+    'folders-loading-more':(n) => `Loading photos… (${n} so far)`,
+  }
+};
+
+let lang = localStorage.getItem('tc-lang') || 'fi';
+
+function t(key, ...args) {
+  const val = T[lang][key] || T['en'][key] || key;
+  return typeof val === 'function' ? val(...args) : val;
+}
+
+function applyTranslations() {
+  document.querySelectorAll('[data-t]').forEach(el => {
+    const key = el.dataset.t;
+    const val = T[lang][key];
+    if (!val) return;
+    if (typeof val === 'string') el.innerHTML = val;
+  });
+  document.getElementById('lang-fi').classList.toggle('active', lang === 'fi');
+  document.getElementById('lang-en').classList.toggle('active', lang === 'en');
+  document.documentElement.lang = lang;
+}
+
+function setLang(l) {
+  lang = l;
+  localStorage.setItem('tc-lang', l);
+  applyTranslations();
+  // Re-render dynamic text
+  updateViewerStatus();
+  updateVselBar();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CONFIG & STATE
+// ─────────────────────────────────────────────────────────────────────────────
+const DRIVE_API = 'https://www.googleapis.com/drive/v3';
+const SCOPES    = 'https://www.googleapis.com/auth/drive.readonly profile email';
+let CLIENT_ID   = localStorage.getItem('tc-client-id') || '';
+let token       = null;
+let photos      = [];
+let selFolder   = null;
+let filterMode  = 'count';
+let viewerList  = [];
+let viewerShown = 0;
+let selection   = [];   // ordered [id, id] — max 2
+let viewIndex   = -1;
+let sliderDragging = false;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BOOT
+// ─────────────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  applyTranslations();
+  if (!CLIENT_ID) {
+    document.getElementById('setup-overlay').classList.remove('hidden');
+  } else {
+    document.getElementById('setup-overlay').classList.add('hidden');
+    document.getElementById('shell').classList.add('visible');
+  }
+});
+
+function saveSetup() {
+  const cid = document.getElementById('in-client-id').value.trim();
+  if (!cid || !cid.includes('.apps.googleusercontent.com')) {
+    toast('Paste a valid OAuth Client ID'); return;
+  }
+  CLIENT_ID = cid;
+  localStorage.setItem('tc-client-id', cid);
+  document.getElementById('setup-overlay').classList.add('hidden');
+  document.getElementById('shell').classList.add('visible');
+}
+
+function openSettings() {
+  localStorage.removeItem('tc-client-id');
+  location.reload();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUTH
+// ─────────────────────────────────────────────────────────────────────────────
+function signIn() {
+  const poll = setInterval(() => {
+    if (!window.google?.accounts?.oauth2) return;
+    clearInterval(poll);
+    google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID, scope: SCOPES,
+      callback: async (r) => {
+        if (r.error) { toast(t('toast-signin-fail', r.error)); return; }
+        token = r.access_token;
+        await loadUser();
+        document.getElementById('settings-btn').style.display = '';
+        document.getElementById('signout-btn').style.display  = '';
+        showScreen('folders');
+        loadFolders();
+      }
+    }).requestAccessToken();
+  }, 150);
+}
+
+async function loadUser() {
+  try {
+    const u = await gfetch('https://www.googleapis.com/oauth2/v3/userinfo');
+    const pill = document.getElementById('user-pill');
+    const av   = document.getElementById('u-avatar');
+    av.src = u.picture || '';
+    av.style.display = u.picture ? '' : 'none';
+    document.getElementById('u-name').textContent = u.name || u.email || '';
+    pill.style.display = 'flex';
+  } catch(_) {}
+}
+
+function signOut() {
+  token = null; photos = []; selFolder = null; selection = [];
+  document.getElementById('user-pill').style.display  = 'none';
+  document.getElementById('settings-btn').style.display = 'none';
+  document.getElementById('signout-btn').style.display  = 'none';
+  showScreen('signin');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DRIVE
+// ─────────────────────────────────────────────────────────────────────────────
+async function gfetch(url) {
+  const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!r.ok) throw new Error(`Drive error ${r.status}`);
+  return r.json();
+}
+
+async function loadFolders() {
+  const sub  = document.getElementById('folder-sub');
+  const grid = document.getElementById('folder-grid');
+  sub.textContent = t('folders-loading');
+  grid.innerHTML  = '';
+  try {
+    const d = await gfetch(`${DRIVE_API}/files?q=mimeType%3D'application%2Fvnd.google-apps.folder'+and+trashed%3Dfalse&fields=files(id%2Cname)&pageSize=100&orderBy=name`);
+    const folders = d.files || [];
+    sub.textContent = folders.length ? t('folders-found', folders.length) : t('folders-none');
+    folders.forEach(f => {
+      const el = document.createElement('div');
+      el.className = 'folder-card';
+      el.innerHTML = `<span>📁</span> ${esc(f.name)}`;
+      el.onclick = () => {
+        document.querySelectorAll('.folder-card').forEach(x => x.classList.remove('sel'));
+        el.classList.add('sel');
+        selFolder = f;
+        document.getElementById('open-btn').disabled = false;
+      };
+      grid.appendChild(el);
+    });
+  } catch(e) { sub.textContent = 'Error: ' + e.message; }
+}
+
+async function openFolder() {
+  if (!selFolder) return;
+  showScreen('viewer');
+  document.getElementById('folder-tag').textContent = selFolder.name;
+  photos = []; selection = [];
+  document.getElementById('viewer-grid').innerHTML = `<div style="font-size:13px;color:var(--ink3);font-family:var(--mono);padding:1rem 0">${t('folders-loading')}</div>`;
+  try {
+    const all = [];
+    let pageToken = '';
+    do {
+      const tp = pageToken ? `&pageToken=${pageToken}` : '';
+      const d  = await gfetch(`${DRIVE_API}/files?q='${selFolder.id}'+in+parents+and+mimeType+contains+'image%2F'+and+trashed%3Dfalse&fields=files(id%2Cname%2CmimeType%2CmodifiedTime%2CthumbnailLink)%2CnextPageToken&pageSize=1000&orderBy=modifiedTime+desc${tp}`);
+      all.push(...(d.files || []));
+      pageToken = d.nextPageToken || '';
+      if (pageToken) document.getElementById('viewer-grid').innerHTML = `<div style="font-size:13px;color:var(--ink3);font-family:var(--mono);padding:1rem 0">${t('folders-loading-more', all.length)}</div>`;
+    } while (pageToken);
+    photos = all;
+    if (!photos.length) { document.getElementById('viewer-grid').innerHTML = `<div style="font-size:13px;color:var(--ink3);padding:1rem 0">${t('toast-no-images')}</div>`; return; }
+    initViewer();
+    toast(t('toast-loaded', photos.length));
+  } catch(e) {
+    document.getElementById('viewer-grid').innerHTML = `<div style="font-size:13px;color:#b83a1a;padding:1rem 0">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+function goBack() { showScreen('folders'); }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VIEWER
+// ─────────────────────────────────────────────────────────────────────────────
+function initViewer() {
+  filterMode  = 'count';
+  viewerList  = photos; // already sorted newest-first by Drive query
+  viewerShown = Math.min(12, viewerList.length);
+  renderGrid();
+  updateViewerStatus();
+  updateMoreBtn();
+}
+
+function toggleFilterPanel() {
+  document.getElementById('filter-panel').classList.toggle('show');
+}
+
+function setFilterMode(mode, btn) {
+  filterMode = mode;
+  document.querySelectorAll('#filter-mode-seg button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('filter-count-row').style.display = mode === 'count' ? '' : 'none';
+  document.getElementById('filter-date-row').style.display  = mode === 'date'  ? '' : 'none';
+}
+
+function applyFilter() {
+  if (filterMode === 'count') {
+    const val = document.getElementById('vf-count').value;
+    viewerList  = val === 'all' ? photos : photos.slice(0, parseInt(val, 10));
+  } else {
+    const fromVal = document.getElementById('vf-from').value;
+    const toVal   = document.getElementById('vf-to').value;
+    const from = fromVal ? new Date(fromVal + 'T00:00:00').getTime() : -Infinity;
+    const to   = toVal   ? new Date(toVal   + 'T23:59:59').getTime() :  Infinity;
+    viewerList = photos.filter(p => {
+      const t2 = p.modifiedTime ? new Date(p.modifiedTime).getTime() : 0;
+      return t2 >= from && t2 <= to;
+    });
+  }
+  viewerShown = Math.min(12, viewerList.length);
+  selection   = [];
+  renderGrid();
+  updateViewerStatus();
+  updateMoreBtn();
+  updateVselBar();
+  document.getElementById('filter-panel').classList.remove('show');
+}
+
+function loadMore() {
+  viewerShown = Math.min(viewerShown + 12, viewerList.length);
+  renderGrid();
+  updateViewerStatus();
+  updateMoreBtn();
+}
+
+function updateViewerStatus() {
+  document.getElementById('viewer-status').textContent = viewerList.length
+    ? t('viewer-status', Math.min(viewerShown, viewerList.length), viewerList.length)
+    : '';
+}
+
+function updateMoreBtn() {
+  document.getElementById('more-btn').style.display = viewerShown < viewerList.length ? '' : 'none';
+}
+
+function renderGrid() {
+  const grid = document.getElementById('viewer-grid');
+  if (!viewerList.length) { grid.innerHTML = `<div style="font-size:13px;color:var(--ink3);padding:1rem 0">${t('toast-no-images')}</div>`; return; }
+  grid.innerHTML = '';
+  viewerList.slice(0, viewerShown).forEach(p => grid.appendChild(buildCard(p)));
+}
+
+function buildCard(p) {
+  const selIdx = selection.indexOf(p.id);
+  const el = document.createElement('div');
+  el.className = 'vc' + (selIdx !== -1 ? ' vc-sel' : '');
+  el.dataset.id = p.id;
+  const thumb = p.thumbnailLink
+    ? `<img class="vc-thumb" src="${p.thumbnailLink}" alt="" loading="lazy">`
+    : `<div class="vc-ph">📷</div>`;
+  const dateStr = p.modifiedTime ? new Date(p.modifiedTime).toLocaleString(lang === 'fi' ? 'fi-FI' : 'en-GB', { dateStyle:'short', timeStyle:'short' }) : '';
+  const order = selIdx !== -1 ? `<span class="vc-order">${selIdx + 1}</span>` : '';
+  el.innerHTML = `${order}<div class="vc-check">${selIdx !== -1 ? '✓' : ''}</div>${thumb}<div class="vc-foot"><div class="vc-name">${esc(p.name)}</div><div class="vc-date">${dateStr}</div></div>`;
+  // Plain click → view image (if nothing selected); checkmark always toggles
+  el.onclick = () => { if (selection.length === 0) { openView(p); } else { toggleSelect(p.id); } };
+  el.querySelector('.vc-check').onclick = (e) => { e.stopPropagation(); toggleSelect(p.id); };
+  return el;
+}
+
+function toggleSelect(id) {
+  const idx = selection.indexOf(id);
+  if (idx !== -1) { selection.splice(idx, 1); }
+  else { selection.push(id); if (selection.length > 2) selection.shift(); }
+  renderGrid();
+  updateVselBar();
+}
+
+function clearSelection() { selection = []; renderGrid(); updateVselBar(); }
+
+function updateVselBar() {
+  const bar = document.getElementById('vsel-bar');
+  if (!selection.length) { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  document.getElementById('vsel-lbl').textContent = t('vsel-lbl', selection.length);
+  document.getElementById('vsel-compare-btn').disabled = selection.length !== 2;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SINGLE IMAGE VIEW
+// ─────────────────────────────────────────────────────────────────────────────
+function openView(p) {
+  viewIndex = viewerList.findIndex(x => x.id === p.id);
+  renderView();
+  document.getElementById('view-overlay').classList.add('show');
+}
+
+function renderView() {
+  const p = viewerList[viewIndex];
+  if (!p) return;
+  document.getElementById('view-img').src  = p.thumbnailLink ? p.thumbnailLink.replace(/=s\d+/, '=s1600') : '';
+  document.getElementById('view-name').textContent = p.name;
+  document.getElementById('view-date').textContent = p.modifiedTime ? new Date(p.modifiedTime).toLocaleString(lang === 'fi' ? 'fi-FI' : 'en-GB') : '';
+  document.getElementById('view-prev').disabled = viewIndex <= 0;
+  document.getElementById('view-next').disabled = viewIndex >= viewerList.length - 1;
+}
+
+function navView(dir) {
+  const next = viewIndex + dir;
+  if (next < 0 || next >= viewerList.length) return;
+  viewIndex = next;
+  renderView();
+}
+
+function closeView() { document.getElementById('view-overlay').classList.remove('show'); }
+
+document.addEventListener('keydown', (ev) => {
+  if (document.getElementById('view-overlay').classList.contains('show')) {
+    if (ev.key === 'ArrowRight') { navView(1); ev.preventDefault(); }
+    else if (ev.key === 'ArrowLeft') { navView(-1); ev.preventDefault(); }
+    else if (ev.key === 'Escape') closeView();
+  } else if (document.getElementById('slider-overlay').classList.contains('show')) {
+    if (ev.key === 'Escape') closeSlider();
+  } else if (document.getElementById('diff-overlay').classList.contains('show')) {
+    if (ev.key === 'Escape') closeDiff();
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COMPARE CHOICE
+// ─────────────────────────────────────────────────────────────────────────────
+function getPair() {
+  const a = photos.find(p => p.id === selection[0]);
+  const b = photos.find(p => p.id === selection[1]);
+  const ta = a?.modifiedTime ? new Date(a.modifiedTime).getTime() : 0;
+  const tb = b?.modifiedTime ? new Date(b.modifiedTime).getTime() : 0;
+  return ta <= tb ? { older: a, newer: b } : { older: b, newer: a };
+}
+
+function openCompareChoice() {
+  if (selection.length !== 2) return;
+  document.getElementById('compare-choice').classList.add('show');
+  // update translated strings in choice card
+  document.querySelectorAll('#compare-choice [data-t]').forEach(el => {
+    const val = T[lang][el.dataset.t];
+    if (val && typeof val === 'string') el.innerHTML = val;
+  });
+}
+function closeChoice() { document.getElementById('compare-choice').classList.remove('show'); }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SLIDER COMPARE
+// ─────────────────────────────────────────────────────────────────────────────
+function openSlider() {
+  closeChoice();
+  const { older, newer } = getPair();
+  document.getElementById('sl-img-old').src = older.thumbnailLink?.replace(/=s\d+/, '=s1600') || '';
+  document.getElementById('sl-img-new').src = newer.thumbnailLink?.replace(/=s\d+/, '=s1600') || '';
+  document.getElementById('sl-lbl-old').textContent = t('sl-lbl-old');
+  document.getElementById('sl-lbl-new').textContent = t('sl-lbl-new');
+  document.getElementById('slider-info').textContent =
+    (older.modifiedTime ? new Date(older.modifiedTime).toLocaleString(lang === 'fi' ? 'fi-FI' : 'en-GB', {dateStyle:'short',timeStyle:'short'}) : older.name) +
+    '  →  ' +
+    (newer.modifiedTime ? new Date(newer.modifiedTime).toLocaleString(lang === 'fi' ? 'fi-FI' : 'en-GB', {dateStyle:'short',timeStyle:'short'}) : newer.name);
+  document.getElementById('slider-foot').textContent = t('slider-foot');
+  document.getElementById('slider-overlay').classList.add('show');
+  setSliderPos(50);
+  initSliderDrag();
+}
+
+function setSliderPos(pct) {
+  pct = Math.max(0, Math.min(100, pct));
+  document.getElementById('sl-img-new').style.clipPath = `inset(0 0 0 ${pct}%)`;
+  document.getElementById('sl-line').style.left  = pct + '%';
+  document.getElementById('sl-knob').style.left  = pct + '%';
+}
+
+function initSliderDrag() {
+  const wrap   = document.getElementById('slider-wrap');
+  const handle = document.getElementById('sl-handle');
+  // Remove old listeners by cloning the handle
+  const newHandle = handle.cloneNode(true);
+  handle.parentNode.replaceChild(newHandle, handle);
+
+  function pos(ev) {
+    const rect = wrap.getBoundingClientRect();
+    const x = (ev.touches ? ev.touches[0].clientX : ev.clientX) - rect.left;
+    return (x / rect.width) * 100;
+  }
+  function onDown(e) { sliderDragging = true; setSliderPos(pos(e)); e.preventDefault(); }
+  function onMove(e) { if (sliderDragging) { setSliderPos(pos(e)); e.preventDefault(); } }
+  function onUp()    { sliderDragging = false; }
+
+  newHandle.addEventListener('mousedown',  onDown);
+  newHandle.addEventListener('touchstart', onDown, { passive: false });
+  window.addEventListener('mousemove',  onMove);
+  window.addEventListener('touchmove',  onMove, { passive: false });
+  window.addEventListener('mouseup',    onUp);
+  window.addEventListener('touchend',   onUp);
+}
+
+function closeSlider() { document.getElementById('slider-overlay').classList.remove('show'); }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EDGE DIFF
+// ─────────────────────────────────────────────────────────────────────────────
+async function openDiff() {
+  closeChoice();
+  const { older, newer } = getPair();
+  const container = document.getElementById('diff-canvases');
+  container.innerHTML = `<div class="diff-loading">${t('diff-loading')}</div>`;
+  document.getElementById('diff-info').textContent =
+    (older.modifiedTime ? new Date(older.modifiedTime).toLocaleString(lang === 'fi' ? 'fi-FI' : 'en-GB', {dateStyle:'short',timeStyle:'short'}) : older.name) +
+    '  →  ' +
+    (newer.modifiedTime ? new Date(newer.modifiedTime).toLocaleString(lang === 'fi' ? 'fi-FI' : 'en-GB', {dateStyle:'short',timeStyle:'short'}) : newer.name);
+  document.getElementById('diff-overlay').classList.add('show');
+  try {
+    const [imgA, imgB] = await Promise.all([loadImg(older), loadImg(newer)]);
+    const W = Math.min(imgA.naturalWidth,  imgB.naturalWidth,  720);
+    const H = Math.min(imgA.naturalHeight, imgB.naturalHeight, 540);
+    container.innerHTML = '';
+    container.appendChild(makeImgCol(imgA, W, H, t('diff-lbl-a')));
+    container.appendChild(makeImgCol(imgB, W, H, t('diff-lbl-b')));
+    container.appendChild(makeDiffCol(imgA, imgB, W, H, t('diff-lbl-diff')));
+  } catch(e) {
+    container.innerHTML = `<div class="diff-loading">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+async function loadImg(photo) {
+  // Download via authenticated Drive API to avoid CORS canvas taint
+  const resp = await fetch(
+    `${DRIVE_API}/files/${photo.id}?alt=media`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!resp.ok) throw new Error(`Could not download image (${resp.status})`);
+  const blob = await resp.blob();
+  const url  = URL.createObjectURL(blob);
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload  = () => { URL.revokeObjectURL(url); res(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Image load failed')); };
+    img.src = url;
+  });
+}
+
+function makeImgCol(img, W, H, label) {
+  const col = document.createElement('div');
+  col.className = 'diff-col';
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  c.getContext('2d').drawImage(img, 0, 0, W, H);
+  const lbl = document.createElement('div'); lbl.className = 'diff-lbl'; lbl.textContent = label;
+  col.appendChild(c); col.appendChild(lbl);
+  return col;
+}
+
+function makeDiffCol(imgA, imgB, W, H, label) {
+  const ca = document.createElement('canvas'); ca.width = W; ca.height = H;
+  const cb = document.createElement('canvas'); cb.width = W; cb.height = H;
+  ca.getContext('2d').drawImage(imgA, 0, 0, W, H);
+  cb.getContext('2d').drawImage(imgB, 0, 0, W, H);
+  const da = ca.getContext('2d').getImageData(0, 0, W, H);
+  const db = cb.getContext('2d').getImageData(0, 0, W, H);
+
+  const gray = (d, i) => 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
+  const gA = new Float32Array(W * H), gB = new Float32Array(W * H);
+  for (let i = 0, j = 0; i < da.data.length; i += 4, j++) {
+    gA[j] = gray(da.data, i);
+    gB[j] = gray(db.data, i);
+  }
+
+  function blur(g) {
+    const o = new Float32Array(W * H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      let s = 0, n = 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const xx = x+dx, yy = y+dy;
+        if (xx>=0&&xx<W&&yy>=0&&yy<H) { s += g[yy*W+xx]; n++; }
+      }
+      o[y*W+x] = s/n;
+    }
+    return o;
+  }
+
+  function sobel(g) {
+    const o = new Float32Array(W * H);
+    const kx = [-1,0,1,-2,0,2,-1,0,1], ky = [-1,-2,-1,0,0,0,1,2,1];
+    for (let y = 1; y < H-1; y++) for (let x = 1; x < W-1; x++) {
+      let sx = 0, sy = 0, k = 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const v = g[(y+dy)*W+(x+dx)];
+        sx += v*kx[k]; sy += v*ky[k]; k++;
+      }
+      o[y*W+x] = Math.sqrt(sx*sx+sy*sy);
+    }
+    return o;
+  }
+
+  const eA = sobel(blur(gA)), eB = sobel(blur(gB));
+  const out = document.createElement('canvas'); out.width = W; out.height = H;
+  const octx = out.getContext('2d');
+  const od = octx.createImageData(W, H);
+  const THRESH = 45;
+  for (let i = 0, j = 0; i < od.data.length; i += 4, j++) {
+    const diff = Math.abs(eA[j] - eB[j]);
+    if (diff > THRESH) {
+      od.data[i]=255; od.data[i+1]=0; od.data[i+2]=200; od.data[i+3]=255;
+    } else {
+      const g2 = Math.min(255, eA[j]) * 0.5;
+      od.data[i]=od.data[i+1]=od.data[i+2]=g2; od.data[i+3]=255;
+    }
+  }
+  octx.putImageData(od, 0, 0);
+
+  const col = document.createElement('div'); col.className = 'diff-col';
+  const lbl = document.createElement('div'); lbl.className = 'diff-lbl'; lbl.textContent = label;
+  col.appendChild(out); col.appendChild(lbl);
+  return col;
+}
+
+function closeDiff() { document.getElementById('diff-overlay').classList.remove('show'); }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FULLSCREEN
+// ─────────────────────────────────────────────────────────────────────────────
+function toggleFullscreen(elId) {
+  const el = document.getElementById(elId);
+  if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+    (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+  } else {
+    (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SCREENS + UTILS
+// ─────────────────────────────────────────────────────────────────────────────
+function showScreen(n) {
+  ['signin','folders','viewer'].forEach(s =>
+    document.getElementById('screen-' + s).style.display = s === n ? 'block' : 'none'
+  );
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.className = '', 3000);
+}
+</script>
+</body>
+</html>
